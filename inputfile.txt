@@ -1,0 +1,10 @@
+max_timesteps= 1000
+sample_interval= 10
+
+mu= 0.001
+sigma= 0.001
+lambda= 0.00001
+
+prey_start_number= 100
+predator_start_number= 100
+
