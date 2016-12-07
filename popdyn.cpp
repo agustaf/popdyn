@@ -30,7 +30,7 @@ int find_descriptor(ifstream& fp_in, const string& descriptor){
 	return(1);
 }
 int probrange_check(const double& value, const string name){
-	if((value <= 0.0) || (value > 1.0)){
+	if((value <= double(0.0)) || (value > double(1.0)){
 		cout << "Input error, value out of range for double variable " <<  \
 		  name << endl;
 		return(1);
@@ -53,6 +53,16 @@ long direct_binomial(const double& success_prob, const long& trials){
 		}
 	}
 	return(count);
+}
+long gauss_binomial(const double& success_prob, const long& trials){
+	const double mean_success = static_cast<double>(trials)*success_prob;
+	const double stddev = sqrt(mean_success*(double(1.0)-success_prob));
+	const count = static_cast<long>(round(stddev*gaussrandgen() + \
+	  mean_success));
+	return(count);
+}
+long poisson_binomial(const double& success_prob, const long& trials){
+	return(0);
 }
 
 
@@ -116,13 +126,15 @@ int main(int argc, char** argv){
 	for(int i=0; i<species; ++i){
 		species_counts[i] = 0;
 	}
-	species_counts[0] = prey_start_number;
-	species_counts[1] = predator_start_number;
 	autoinit_randgen();
 	//const long max_relevant_timesteps = max_samples*sample_interval;
 	const long max_relevant_timesteps = max_timesteps;
 	const long fixed_sample_interval = sample_interval;
-	long last_timestep(0),trigger_index(0),sample_index(0);
+	long last_timestep(0),trigger_index(0),sample_index(1);
+	species_counts[0] = prey_start_number;
+	species_counts[1] = predator_start_number;
+	samples[0][0] = species_counts[0];
+	samples[0][1] = species_counts[1];
 	for(long i=0; i<max_relevant_timesteps; ++i){
 		long mu_change = direct_binomial(mu, species_counts[0]);
 		long sigma_change = direct_binomial(sigma, species_counts[1]);
@@ -131,7 +143,7 @@ int main(int argc, char** argv){
 		species_counts[0] += (mu_change - lambda_change);
 		species_counts[1] += (lambda_change - sigma_change);
 		if((species_counts[0] <= 0) || (species_counts[1] <= 0)){
-			last_timestep = i;
+			last_timestep = i+1;
 			break;
 		}
 		++trigger_index;
@@ -159,11 +171,14 @@ int main(int argc, char** argv){
 	  "  " << species_counts[1] << endl;
 	cout << endl;
 	ofstream fp_out;
-	fp_out.open("popluation_trajectory.txt", ios::out);
+	fp_out.open("population_trajectory.txt", ios::out);
 	fp_out.clear();
 	fp_out.seekp(0, ios::beg);
 	for(long i=0; i<sample_index; ++i){
-		fp_out << samples[i][0] << " " << samples[i][1] << endl;
+		fp_out << i*fixed_sample_interval << " " << samples[i][0] << " " << samples[i][1] << endl;
+	}
+	if(last_timestep > 0){
+		fp_out << last_timestep << " " << species_counts[0] << " " << species_counts[1] << endl;
 	}
 	fp_out.close();
 	

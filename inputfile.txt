@@ -1,4 +1,4 @@
-max_timesteps= 1000
+max_timesteps= 100000
 sample_interval= 10
 
 mu= 0.001
