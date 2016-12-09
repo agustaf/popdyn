@@ -8,3 +8,10 @@ lambda= 0.00001
 prey_start_number= 100
 predator_start_number= 100
 
+gather_extinction_times= 0
+total_extinction_times = 1
+extinction_time_data= all
+
+extinction_time_histogram_length= 1000
+extinction_time_histogram_bin_size= 1
+
