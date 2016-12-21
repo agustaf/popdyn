@@ -1,17 +1,17 @@
-max_timesteps= 100000
+max_timesteps= 130000
 sample_interval= 10
 
 mu= 0.001
 sigma= 0.001
 lambda= 0.00001
 
-prey_start_number= 100
-predator_start_number= 100
+prey_start_number= -1
+predator_start_number= -1
 
-gather_extinction_times= 0
-total_extinction_times = 1
+gather_extinction_times= 1
+total_extinction_times= 10
 extinction_time_data= all
 
-extinction_time_histogram_length= 1000
-extinction_time_histogram_bin_size= 1
+extinction_time_histogram_length= 15
+extinction_time_histogram_bin_size= 10000
 

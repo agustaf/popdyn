@@ -111,49 +111,55 @@ int main(int argc, char** argv){
 	input_success += probrange_check(lambda, "lambda");
 	input_success += find_descriptor(fp_in, "prey_start_number=");
 	fp_in >> prey_start_number;
-	input_success += positive_longcheck(prey_start_number, \
-	  "prey_start_number");
+	if(prey_start_number != -1){
+		input_success += positive_longcheck(prey_start_number, \
+		  "prey_start_number");
+	}
 	input_success += find_descriptor(fp_in, "predator_start_number=");
 	fp_in >> predator_start_number;
-	input_success += positive_longcheck(predator_start_number, \
-	  "predator_start_number");
+	if(predator_start_number != -1){
+		input_success += positive_longcheck(predator_start_number, \
+		  "predator_start_number");
+	}
 	input_success += find_descriptor(fp_in, "gather_extinction_times=");
 	fp_in >> gather_extinction_times;
 	input_success += binary_intcheck(gather_extinction_times, \
 	  "gather_extinction_times");
-	input_success += find_descriptor(fp_in, "total_extinction_times=");
-	fp_in >> total_extinction_times;
-	input_success += positive_longcheck(total_extinction_times, \
-	  "total_extinction_times");
-	input_success += find_descriptor(fp_in, "extinction_time_data=");
-	fp_in >> extinction_time_data;
-	if(extinction_time_data == "times"){
-		keep_all_extinction_times = 1;
-	}
-	else if(extinction_time_data == "histogram"){
-		keep_extinction_time_histogram = 1;
-	}
-	else if(extinction_time_data == "all"){
-		keep_all_extinction_times = 1;
-		keep_extinction_time_histogram = 1;
-	}
-	else{
-		cout << "Unknown extinction_time_data value: " << \
-		  extinction_time_data << endl;
-		++input_success;
-	}
-	if(keep_extinction_time_histogram == 1){
-		input_success += find_descriptor(fp_in, \
-		  "extinction_time_histogram_length=");
-		fp_in >> extinction_time_histogram_length;
-		input_success += positive_longcheck(extinction_time_histogram_length, \
-		  "extinction_time_histogram_length");
-		input_success += find_descriptor(fp_in, \
-		  "extinction_time_histogram_bin_size=");
-		fp_in >> extinction_time_histogram_bin_size;
-		input_success += positive_longcheck( \
-		  extinction_time_histogram_bin_size, \
-		  "extinction_time_histogram_bin_size");
+	if(gather_extinction_times == 1){
+		input_success += find_descriptor(fp_in, "total_extinction_times=");
+		fp_in >> total_extinction_times;
+		input_success += positive_longcheck(total_extinction_times, \
+		  "total_extinction_times");
+		input_success += find_descriptor(fp_in, "extinction_time_data=");
+		fp_in >> extinction_time_data;
+		if(extinction_time_data == "times"){
+			keep_all_extinction_times = 1;
+		}
+		else if(extinction_time_data == "histogram"){
+			keep_extinction_time_histogram = 1;
+		}
+		else if(extinction_time_data == "all"){
+			keep_all_extinction_times = 1;
+			keep_extinction_time_histogram = 1;
+		}
+		else{
+			cout << "Unknown extinction_time_data value: " << \
+			  extinction_time_data << endl;
+			++input_success;
+		}
+		if(keep_extinction_time_histogram == 1){
+			input_success += find_descriptor(fp_in, \
+			  "extinction_time_histogram_length=");
+			fp_in >> extinction_time_histogram_length;
+			input_success += positive_longcheck(extinction_time_histogram_length, \
+			  "extinction_time_histogram_length");
+			input_success += find_descriptor(fp_in, \
+			  "extinction_time_histogram_bin_size=");
+			fp_in >> extinction_time_histogram_bin_size;
+			input_success += positive_longcheck( \
+			  extinction_time_histogram_bin_size, \
+			  "extinction_time_histogram_bin_size");
+		}
 	}
 	fp_in.close();
 	if(input_success != 0){
@@ -182,7 +188,7 @@ int main(int argc, char** argv){
 		if(keep_all_extinction_times == 1){
 			extinction_times = new long[total_extinction_times];
 			for(long i=0; i<total_extinction_times; ++i){
-				extinction_times[i] = 0;
+				extinction_times[i] = -1;
 			}
 		}
 		if(keep_extinction_time_histogram == 1){
@@ -205,9 +211,22 @@ int main(int argc, char** argv){
 	const long max_relevant_timesteps = max_timesteps;
 	const long fixed_sample_interval = sample_interval;
 	long last_timestep(0),trigger_index(0),sample_index(0);
-	species_counts[0] = prey_start_number;
-	species_counts[1] = predator_start_number;
+	if(prey_start_number == -1){
+		prey_start_number = static_cast<long>(round(mu/lambda));
+		if(prey_start_number < 1){
+			prey_start_number = 1;
+		}
+	}
+	if(predator_start_number == -1){
+		predator_start_number = static_cast<long>(round(sigma/lambda));
+		if(predator_start_number < 1){
+			predator_start_number = 1;
+		}
+	}
+	
 	if(gather_extinction_times == 0){
+		species_counts[0] = prey_start_number;
+		species_counts[1] = predator_start_number;
 		samples[0][0] = species_counts[0];
 		samples[0][1] = species_counts[1];
 		sample_index = 1;
@@ -232,10 +251,12 @@ int main(int argc, char** argv){
 		}
 		cout << endl;
 		if(last_timestep > 0){
-			cout << "Population extinction at timestep: " << last_timestep << endl;
+			cout << "Population extinction at timestep: " << last_timestep \
+			  << endl;
 		}
 		else{
-			cout << "Simulation finished with populations still existing." << endl;
+			cout << "Simulation finished with populations still existing." \
+			  << endl;
 			cout << "Simulated timesteps: " << max_relevant_timesteps << endl;
 		}
 		for(int i=0; i<species; ++i){
@@ -251,10 +272,12 @@ int main(int argc, char** argv){
 		fp_out.clear();
 		fp_out.seekp(0, ios::beg);
 		for(long i=0; i<sample_index; ++i){
-			fp_out << i*fixed_sample_interval << " " << samples[i][0] << " " << samples[i][1] << endl;
+			fp_out << i*fixed_sample_interval << " " << samples[i][0] << " " \
+			  << samples[i][1] << endl;
 		}
 		if(last_timestep > 0){
-			fp_out << last_timestep << " " << species_counts[0] << " " << species_counts[1] << endl;
+			fp_out << last_timestep << " " << species_counts[0] << " "  \
+			  << species_counts[1] << endl;
 		}
 		fp_out.close();
 	}
@@ -262,6 +285,8 @@ int main(int argc, char** argv){
 		const double hbin_size = \
 		  static_cast<double>(extinction_time_histogram_bin_size);
 		for(long times=0; times<total_extinction_times; ++times){
+			species_counts[0] = prey_start_number;
+			species_counts[1] = predator_start_number;
 			last_timestep = -1;
 			for(long i=0; i<max_relevant_timesteps; ++i){
 				long mu_change = direct_binomial(mu, species_counts[0]);
@@ -275,16 +300,48 @@ int main(int argc, char** argv){
 					break;
 				}
 			}
+			if(last_timestep < 1){
+				cout << "Warning, no extinction before timestep limit." << endl;
+				continue;
+			}
 			if(keep_all_extinction_times == 1){
 				extinction_times[times] = last_timestep;
 			}
 			if(keep_extinction_time_histogram == 1){
 				long index = static_cast<long>( \
 				  round(static_cast<double>(last_timestep)/hbin_size));
-				++extinction_time_histogram[index];
+				if(index < extinction_time_histogram_length){
+					++extinction_time_histogram[index];
+				}
+				else{
+					cout << "Warning, extinction time exceeds histogram length." << endl;
+				}
 			}
 		}
+		ofstream fp_out;
+		if(keep_all_extinction_times == 1){
+			fp_out.open("extinction_time_list.txt", ios::out);
+			fp_out.clear();
+			fp_out.seekp(0, ios::beg);
+			for(long i=0; i<total_extinction_times; ++i){
+				if(extinction_times[i] > 0){
+					fp_out << extinction_times[i] << endl;
+				}
+			}
+			fp_out.close();
+		}
+		if(keep_extinction_time_histogram == 1){
+			fp_out.open("extinction_time_histogram.txt", ios::out);
+			fp_out.clear();
+			fp_out.seekp(0, ios::beg);
+			for(long i=0; i<extinction_time_histogram_length; ++i){
+				fp_out << i*extinction_time_histogram_bin_size << " " \
+				  << extinction_time_histogram[i] << endl;
+			}
+			fp_out.close();
+		}
 	}
+
 	
 	/*
 	if(species_counts){
