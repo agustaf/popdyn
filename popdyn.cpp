@@ -6,7 +6,7 @@
 
 using namespace std;
 using namespace randgenbase;
-// Test
+
 #include "./Random_Number_Generators/randgen.cpp"
 
 int find_descriptor(ifstream& fp_in, const string& descriptor){
@@ -83,6 +83,7 @@ int main(int argc, char** argv){
 	double mu(0.0),sigma(0.0),lambda(0.0);
 	long max_timesteps(0),sample_interval(0);
 	long prey_start_number(0),predator_start_number(0);
+	int count_cycles(0);
 	int gather_extinction_times(0);
 	string extinction_time_data = "empty";
 	int keep_all_extinction_times(0);
@@ -91,7 +92,7 @@ int main(int argc, char** argv){
 	long extinction_time_histogram_length(0);
 	long extinction_time_histogram_bin_size(1);
 	
-	fp_in.open(inputfile, ios::in);
+	fp_in.open("inputfile.txt", ios::in);
 	fp_in.clear();
 	fp_in.seekg(0, ios::beg);
 	input_success += find_descriptor(fp_in, "max_timesteps=");
@@ -230,13 +231,39 @@ int main(int argc, char** argv){
 		samples[0][0] = species_counts[0];
 		samples[0][1] = species_counts[1];
 		sample_index = 1;
+		long start_predator = static_cast<long>(round(mu/lambda));
+		long start_prey = static_cast<long>(round(sigma/lambda));
 		for(long i=0; i<max_relevant_timesteps; ++i){
-			long mu_change = direct_binomial(mu, species_counts[0]);
-			long sigma_change = direct_binomial(sigma, species_counts[1]);
-			long species_product = species_counts[0]*species_counts[1];
-			long lambda_change = direct_binomial(lambda, species_product);
-			species_counts[0] += (mu_change - lambda_change);
-			species_counts[1] += (lambda_change - sigma_change);
+			if((species_counts[0] < start_predator) && (species_counts[1] < start_prey)) {
+				long mu_change = direct_binomial(mu, species_counts[0]);
+				long sigma_change = direct_binomial(sigma, species_counts[1]);
+				long species_product = species_counts[0]*species_counts[1];
+				long lambda_change = direct_binomial(lambda, species_product);
+				species_counts[0] += (mu_change - lambda_change);
+				species_counts[1] += (lambda_change - sigma_change);
+				if((species_counts[0] >= start_predator) && (species_counts[1] < start_prey)) {
+					++count_cycles;
+				}
+			}
+			else if((species_counts[0] >= start_predator) && (species_counts[1] < start_prey)){
+				long mu_change = direct_binomial(mu, species_counts[0]);
+				long sigma_change = direct_binomial(sigma, species_counts[1]);
+				long species_product = species_counts[0]*species_counts[1];
+				long lambda_change = direct_binomial(lambda, species_product);
+				species_counts[0] += (mu_change - lambda_change);
+				species_counts[1] += (lambda_change - sigma_change);
+				if((species_counts[0] < start_predator) && (species_counts[1] < start_prey)) {
+					--count_cycles;
+				}
+			}
+			else {
+				long mu_change = direct_binomial(mu, species_counts[0]);
+				long sigma_change = direct_binomial(sigma, species_counts[1]);
+				long species_product = species_counts[0]*species_counts[1];
+				long lambda_change = direct_binomial(lambda, species_product);
+				species_counts[0] += (mu_change - lambda_change);
+				species_counts[1] += (lambda_change - sigma_change);
+			}
 			if((species_counts[0] <= 0) || (species_counts[1] <= 0)){
 				last_timestep = i+1;
 				break;
@@ -264,8 +291,10 @@ int main(int argc, char** argv){
 				species_counts[i] = 0;
 			}
 		}
-		cout << "Final populations: " << species_counts[0] << \
-		  "  " << species_counts[1] << endl;
+		cout << "Final populations: " << endl;
+		cout << "Predator: " << species_counts[0] << endl; 
+		cout << "Prey: " << species_counts[1] << endl;
+		cout << "The total cycles is: " << count_cycles << endl;
 		cout << endl;
 		ofstream fp_out;
 		fp_out.open("population_trajectory.txt", ios::out);
