@@ -175,6 +175,7 @@ int main(int argc, char** argv){
 	const int species = 2;
 	long* extinction_times = 0;
 	long* extinction_time_histogram = 0;
+	long* max_cycles_list = 0;
 	long** samples = 0;
 	if(gather_extinction_times == 0){
 		samples = new long*[max_samples];
@@ -186,6 +187,10 @@ int main(int argc, char** argv){
 		}
 	}
 	else if(gather_extinction_times == 1){
+		max_cycles_list = new long[total_extinction_times];
+		for(long i=0; i<total_extinction_times; ++i){
+				max_cycles_list[i] = -1;
+		}
 		if(keep_all_extinction_times == 1){
 			extinction_times = new long[total_extinction_times];
 			for(long i=0; i<total_extinction_times; ++i){
@@ -233,37 +238,29 @@ int main(int argc, char** argv){
 		sample_index = 1;
 		long start_predator = static_cast<long>(round(mu/lambda));
 		long start_prey = static_cast<long>(round(sigma/lambda));
+		int quadrant = 0;
 		for(long i=0; i<max_relevant_timesteps; ++i){
-			if((species_counts[0] < start_predator) && (species_counts[1] < start_prey)) {
-				long mu_change = direct_binomial(mu, species_counts[0]);
-				long sigma_change = direct_binomial(sigma, species_counts[1]);
-				long species_product = species_counts[0]*species_counts[1];
-				long lambda_change = direct_binomial(lambda, species_product);
-				species_counts[0] += (mu_change - lambda_change);
-				species_counts[1] += (lambda_change - sigma_change);
-				if((species_counts[0] >= start_predator) && (species_counts[1] < start_prey)) {
-					++count_cycles;
-				}
+			if((species_counts[1] < start_predator) && (species_counts[0] < start_prey)) {
+				quadrant = 1;
 			}
-			else if((species_counts[0] >= start_predator) && (species_counts[1] < start_prey)){
-				long mu_change = direct_binomial(mu, species_counts[0]);
-				long sigma_change = direct_binomial(sigma, species_counts[1]);
-				long species_product = species_counts[0]*species_counts[1];
-				long lambda_change = direct_binomial(lambda, species_product);
-				species_counts[0] += (mu_change - lambda_change);
-				species_counts[1] += (lambda_change - sigma_change);
-				if((species_counts[0] < start_predator) && (species_counts[1] < start_prey)) {
-					--count_cycles;
-				}
+			else if((species_counts[1] >= start_predator) && (species_counts[0] < start_prey)) {
+				quadrant = 2;
 			}
 			else {
-				long mu_change = direct_binomial(mu, species_counts[0]);
-				long sigma_change = direct_binomial(sigma, species_counts[1]);
-				long species_product = species_counts[0]*species_counts[1];
-				long lambda_change = direct_binomial(lambda, species_product);
-				species_counts[0] += (mu_change - lambda_change);
-				species_counts[1] += (lambda_change - sigma_change);
+				quadrant = 0;
 			}
+			long mu_change = direct_binomial(mu, species_counts[0]);
+			long sigma_change = direct_binomial(sigma, species_counts[1]);
+			long species_product = species_counts[0]*species_counts[1];
+			long lambda_change = direct_binomial(lambda, species_product);
+			species_counts[0] += (mu_change - lambda_change);				
+			species_counts[1] += (lambda_change - sigma_change)
+				if((species_counts[1] >= start_predator) && (species_counts[0] < start_prey) && (quadrant == 1)) {
+					++count_cycles;
+				}
+				if((species_counts[1] < start_predator) && (species_counts[0] < start_prey) && quadrant == 2) {
+					--count_cycles;
+				}
 			if((species_counts[0] <= 0) || (species_counts[1] <= 0)){
 				last_timestep = i+1;
 				break;
@@ -312,22 +309,57 @@ int main(int argc, char** argv){
 	}
 	else if(gather_extinction_times == 1){
 		const double hbin_size = \
-		  static_cast<double>(extinction_time_histogram_bin_size);
+			static_cast<double>(extinction_time_histogram_bin_size);
 		for(long times=0; times<total_extinction_times; ++times){
+			count_cycles = 0;
 			species_counts[0] = prey_start_number;
 			species_counts[1] = predator_start_number;
+			long start_predator = static_cast<long>(round(mu/lambda));
+			long start_prey = static_cast<long>(round(sigma/lambda));
+			//sample_index = 1;
 			last_timestep = -1;
 			for(long i=0; i<max_relevant_timesteps; ++i){
+				if((species_counts[1] < start_predator) && (species_counts[0] < start_prey)) {
 				long mu_change = direct_binomial(mu, species_counts[0]);
 				long sigma_change = direct_binomial(sigma, species_counts[1]);
 				long species_product = species_counts[0]*species_counts[1];
 				long lambda_change = direct_binomial(lambda, species_product);
 				species_counts[0] += (mu_change - lambda_change);
 				species_counts[1] += (lambda_change - sigma_change);
-				if((species_counts[0] <= 0) || (species_counts[1] <= 0)){
-					last_timestep = i+1;
-					break;
+					if((species_counts[1] >= start_predator) && (species_counts[0] < start_prey)) {
+					++count_cycles;
+					}
 				}
+				else if((species_counts[1] >= start_predator) && (species_counts[0] < start_prey)){
+				long mu_change = direct_binomial(mu, species_counts[0]);
+				long sigma_change = direct_binomial(sigma, species_counts[1]);
+				long species_product = species_counts[0]*species_counts[1];
+				long lambda_change = direct_binomial(lambda, species_product);
+				species_counts[0] += (mu_change - lambda_change);
+				species_counts[1] += (lambda_change - sigma_change);
+					if((species_counts[1] < start_predator) && (species_counts[0] < start_prey)) {
+					--count_cycles;
+					}
+				}
+				else {
+				long mu_change = direct_binomial(mu, species_counts[0]);
+				long sigma_change = direct_binomial(sigma, species_counts[1]);
+				long species_product = species_counts[0]*species_counts[1];
+				long lambda_change = direct_binomial(lambda, species_product);
+				species_counts[0] += (mu_change - lambda_change);
+				species_counts[1] += (lambda_change - sigma_change);
+				}
+				if((species_counts[0] <= 0) || (species_counts[1] <= 0)){
+				last_timestep = i+1;
+				break;
+				}
+				/*++trigger_index;
+				if(trigger_index == fixed_sample_interval){
+				samples[sample_index][0] = species_counts[0];
+				samples[sample_index][1] = species_counts[1];
+				++sample_index;
+				trigger_index = 0;
+				}*/
 			}
 			if(last_timestep < 1){
 				cout << "Warning, no extinction before timestep limit." << endl;
@@ -335,6 +367,7 @@ int main(int argc, char** argv){
 			}
 			if(keep_all_extinction_times == 1){
 				extinction_times[times] = last_timestep;
+				max_cycles_list[times] = count_cycles;
 			}
 			if(keep_extinction_time_histogram == 1){
 				long index = static_cast<long>( \
@@ -358,7 +391,7 @@ int main(int argc, char** argv){
 				}
 			}
 			fp_out.close();
-		}
+			}
 		if(keep_extinction_time_histogram == 1){
 			fp_out.open("extinction_time_histogram.txt", ios::out);
 			fp_out.clear();
@@ -368,6 +401,17 @@ int main(int argc, char** argv){
 				  << extinction_time_histogram[i] << endl;
 			}
 			fp_out.close();
+			}
+		if(keep_all_extinction_times == 1){
+		fp_out.open("max_cycles_list.txt", ios::out);
+		fp_out.clear();
+		fp_out.seekp(0, ios::beg);
+		for(long i=0; i<total_extinction_times; ++i){
+			//if(max_cycles_list[i] > -1){
+				fp_out << max_cycles_list[i] << endl;
+			//}
+		}
+		fp_out.close();
 		}
 	}
 
@@ -392,6 +436,10 @@ int main(int argc, char** argv){
 	if(extinction_time_histogram){
 		delete[] extinction_time_histogram;
 		extinction_time_histogram = 0;
+	}
+	if(max_cycles_list) {
+		delete[] max_cycles_list;
+		max_cycles_list = 0;
 	}
 	return(0);
 }
