@@ -6,4 +6,7 @@
 *.out
 *.dvi
 *.aux
-
+*~
+~*
+*.swp
+.ipynb*

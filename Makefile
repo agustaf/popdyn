@@ -1,6 +1,6 @@
 
 CXX = g++
-CXX_FLAGS = -O3
+CXX_FLAGS = -std=c++17 -O3
 OUTPUTNAME = popdyn
 
 all: popdyn.cpp Makefile
