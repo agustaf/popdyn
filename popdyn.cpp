@@ -376,6 +376,7 @@ int main(int argc, char** argv) {
 					if (species_counts[j] < 1) {
 						species_counts[j] = 0;
 						last_timestep = i + 1;
+						
 					}
 				}
 				quadrant = determine_quadrant(species_counts, equil_prey, \
@@ -395,10 +396,11 @@ int main(int argc, char** argv) {
 				cout << "Warning, no extinction before timestep limit." << endl;
 			}
 			else {
-				cout << "cycle count = " << cycle_count << endl;
+				/*cout << "cycle count = " << cycle_count << endl;*/
 				max_cycles_list[trial] = cycle_count;
 				if (keep_all_extinction_times == 1) {
 					extinction_times[trial] = last_timestep;
+					/*cout << "last timestep = " << last_timestep << endl;*/
 				}
 				if (keep_extinction_time_histogram == 1) {
 					long index = static_cast<long>( \
