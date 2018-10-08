@@ -1,5 +1,3 @@
-max_timesteps= 130000
-sample_interval= 10
 
 mu= 0.001
 sigma= 0.001
@@ -8,10 +6,20 @@ lambda= 0.00001
 prey_start_number= -1
 predator_start_number= -1
 
-gather_extinction_times= 0
+max_timesteps= 130000
 simulation_trials= 10
-extinction_time_data= all
 
+keep_trajectory_samples= 0
+sample_interval= 10
+
+perform_start_number_sweep= 1
+species_to_sweep= prey
+sweep_count= 5
+sweep_change= 10
+
+keep_cycles_to_extinction= 0
+
+keep_extinction_time_histogram= 0
 extinction_time_histogram_length= 15
 extinction_time_histogram_bin_size= 10000
 
