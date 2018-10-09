@@ -2,6 +2,7 @@
 #include <cmath>
 #include <iostream>
 #include <fstream>
+#include <sstream>
 #include <assert.h>
 #include "./Random_Number_Generators/randgen.h"
 
@@ -10,11 +11,12 @@ using namespace randgenbase;
 
 #include "./Random_Number_Generators/randgen.cpp"
 
-constexpr int species_count = 2;
+constexpr int species_types = 2;
 constexpr double zero_double = 0.0;
 constexpr int zero_int = 0;
 constexpr long zero_long = 0;
 constexpr long one_long = 1;
+constexpr long neg_one_long = -1;
 
 typedef struct simulation_parameters {
 	//This struct holds the simulation input parameters.
@@ -49,10 +51,6 @@ typedef struct simulation_data {
 	long* sweep_average_extinction_times;
 	long* max_cycles_list;
 	long* samples;
-	long extinction_time_entries;
-	long sweep_average_extinction_entries;
-	long max_cycles_entries;
-	long samples_entries;
 	~simulation_data() {
 		if (extinction_times) {
 			delete[] extinction_times;
@@ -82,10 +80,6 @@ typedef struct simulation_data {
 		sweep_average_extinction_times = nullptr;
 		max_cycles_list = nullptr;
 		samples = nullptr;
-		extinction_time_entries = zero_long;
-		sweep_average_extinction_entries = zero_long;
-		max_cycles_entries = zero_long;
-		samples_entries = zero_long;
 		return;
 	}
 } simulation_data;
@@ -162,12 +156,71 @@ int species_string_check(const string& value, const string& name) {
 }
 
 
+int open_input_file(const string& filename, ifstream& fp_in, \
+  const string& description) {
+	if (fp_in.is_open()) {
+		cout << "Error, input file already open for " << description << endl;
+		return(1);
+	}
+	fp_in.open(filename, ios::in);
+	if (!fp_in.is_open()) {
+		cout << "Error, input file failed to open for " << description << endl;
+		return(1);
+	}
+	fp_in.clear();
+	fp_in.seekg(0, ios::beg);
+	return(0);
+}
+
+int close_input_file(ifstream& fp_in, const string& description) {
+	if (!fp_in.is_open()) {
+		cout << "Error, input file already closed for " << description << endl;
+		return(1);
+	}
+	fp_in.close();
+	if (fp_in.is_open()) {
+		cout << "Error, input file failed to close for " << description << \
+		  endl;
+		return(1);
+	}
+	return(0);
+}
+
+int open_output_file(const string& filename, ofstream& fp_out, \
+  const string& description) {
+	if (fp_out.is_open()) {
+		cout << "Error, output file already open for " << description << endl;
+		return(1);
+	}
+	fp_out.open(filename, ios::out);
+	if (!fp_out.is_open()) {
+		cout << "Error, output file failed to open for " << description << endl;
+		return(1);
+	}
+	fp_out.clear();
+	fp_out.seekp(0, ios::beg);
+	return(0);
+}
+
+int close_output_file(ofstream& fp_out, const string& description) {
+	if (!fp_out.is_open()) {
+		cout << "Error, output file already closed for " << description << endl;
+		return(1);
+	}
+	fp_out.close();
+	if (fp_out.is_open()) {
+		cout << "Error, output file failed to close for " << description << \
+		  endl;
+		return(1);
+	}
+	return(0);
+}
+
+
 int read_input_parameters(const string& filename, ifstream& fp_in, \
   simulation_parameters& params) {
 	int input_success = 0;
-	fp_in.open(filename, ios::in);
-	fp_in.clear();
-	fp_in.seekg(0, ios::beg);
+	input_success += open_input_file(filename, fp_in, "base input file");
 	input_success += find_descriptor(fp_in, "mu=");
 	fp_in >> params.mu;
 	input_success += probrange_check(params.mu, "mu");
@@ -260,7 +313,7 @@ int read_input_parameters(const string& filename, ifstream& fp_in, \
 		  params.extinction_time_histogram_bin_size, \
 		  "extinction_time_histogram_bin_size");
 	}
-	fp_in.close();
+	input_success += close_input_file(fp_in, "base input file");
 	if (input_success != 0) {
 		cout << "Error, required input parameters  ";
 		cout << "missing or out of bounds." << endl;
@@ -309,8 +362,65 @@ int allocate_data_arrays(simulation_data& data_in, \
 	return(0);
 }
 
-int write_data(const simulation_data& data) {
 
+int write_data(const simulation_data& data, \
+  const simulation_parameters& params) {
+	ostringstream ss;
+	ss.str(string());
+	ss.clear();
+	ss << "_mu" << params.mu << "_sigma" << params.sigma << "_lambda" << \
+	  params.lambda << "_preystart" << params.prey_start_number << \
+	  "_predatorstart" << params.predator_start_number;
+	if (params.perform_start_number_sweep == 1) {
+		const string sweep_species = (params.species_to_sweep == 0) ? \
+		  "prey" : "predator";
+		ss << "sweep" << sweep_species << "_schange" << params.sweep_change;
+	}
+	const string file_suffix = ss.str() + ".txt";
+	ss.str(string());
+	ss.clear();
+	ofstream fp_out;
+	int output_success = 0;
+	if (params.perform_start_number_sweep == 1) {
+		const long sweep_start_value = (params.species_to_sweep == 0) ? \
+		  params.prey_start_number : params.predator_start_number;
+		output_success += open_output_file("extinction_times" + file_suffix, \
+		  fp_out, "extinction_times");
+		cout << "sweep_population_startval,extinction_time" << endl;
+		for (long i=0; i<params.sweep_count; ++i) {
+			long offset = i*params.simulation_trials;
+			long sweep_value = sweep_start_value + (i*params.sweep_change);
+			for (long j=0; j<params.simulation_trials; ++j) {
+				if (data.extinction_times[offset + j] > neg_one_long) {
+					fp_out << sweep_value << "," << \
+					  data.extinction_times[offset + j] << endl;
+				}
+			}
+		}
+		output_success += close_output_file(fp_out, "extinction_times");
+		if (params.keep_trajectory_samples == 1) {
+			output_success += open_output_file( \
+			  "population_trajectory" + file_suffix, fp_out, \
+			  "population_trajectory");
+
+			output_success += close_output_file(fp_out, \
+			  "population_trajectory");
+		}
+	}
+	else {
+		output_success += open_output_file("extinction_times" + file_suffix, \
+		  fp_out, "extinction_times");
+		for (long j=0; j<params.simulation_trials; ++j) {
+  			if (data.extinction_times[j] > 0) {
+  				fp_out << data.extinction_times[j] << endl;
+  			}
+  		}
+		output_success += close_output_file(fp_out, "extinction_times");
+	}
+	if (output_success) {
+		cout << "Error in writing data output." << endl;
+		return(1);
+	}
 	return(0);
 }
 
@@ -344,7 +454,7 @@ inline int determine_quadrant(const long*const species_counts_in, \
   const long& equil_prey_in, const long& equil_predator_in) {
 	//This function determines what "quadrant" the
 	//predator prey system is in.
-	int quadrant_out(-1);
+	int quadrant_out = -1;
 	if (species_counts_in[1] > equil_predator_in) {
 		if (species_counts_in[0] > equil_prey_in) {
 			quadrant_out = 2;
@@ -409,7 +519,7 @@ int main(int argc, char** argv) {
 		params_input.keep_extinction_time_histogram,
 		params_input.extinction_time_histogram_length,
 		params_input.extinction_time_histogram_bin_size,
-		species_count
+		species_types
 	};
 
 
