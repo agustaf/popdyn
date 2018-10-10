@@ -51,6 +51,7 @@ typedef struct simulation_data {
 	long* sweep_average_extinction_times;
 	long* max_cycles_list;
 	long* samples;
+	long single_group_samples;
 	~simulation_data() {
 		if (extinction_times) {
 			delete[] extinction_times;
@@ -80,6 +81,7 @@ typedef struct simulation_data {
 		sweep_average_extinction_times = nullptr;
 		max_cycles_list = nullptr;
 		samples = nullptr;
+		single_group_samples = zero_long;
 		return;
 	}
 } simulation_data;
@@ -332,13 +334,14 @@ int allocate_data_arrays(simulation_data& data_in, \
 	fill(data_in.extinction_times, \
 		  data_in.extinction_times + max_simulation_count, -1);
 	if (params_in.keep_trajectory_samples == 1) {
-		const long single_group_samples = ( \
-		  static_cast<long>(floor( \
+		data_in.single_group_samples = \
+		  (static_cast<long>(floor( \
 		    static_cast<double>(params_in.max_timesteps)/ \
 		    static_cast<double>(params_in.sample_interval) \
-		  )) + 2)*params_in.species*params_in.simulation_trials;
+		  )) + 1)*params_in.species*params_in.simulation_trials;
 		const long max_samples = (params_in.perform_start_number_sweep == 1) ? \
-		  params_in.sweep_count*single_group_samples : single_group_samples;
+		  params_in.sweep_count*data_in.single_group_samples : \
+		  data_in.single_group_samples;
 		data_in.samples = new long[max_samples];
 		fill(data_in.samples, data_in.samples + max_samples, -1);
 	}
@@ -386,23 +389,34 @@ int write_data(const simulation_data& data, \
 		  params.prey_start_number : params.predator_start_number;
 		output_success += open_output_file("extinction_times" + file_suffix, \
 		  fp_out, "extinction_times");
-		cout << "sweep_population_startval,extinction_time" << endl;
+		fp_out << "sweep_population_startval,extinction_time" << endl;
 		for (long i=0; i<params.sweep_count; ++i) {
 			long offset = i*params.simulation_trials;
 			long sweep_value = sweep_start_value + (i*params.sweep_change);
 			for (long j=0; j<params.simulation_trials; ++j) {
 				if (data.extinction_times[offset + j] > neg_one_long) {
 					fp_out << sweep_value << "," << \
-					  data.extinction_times[offset + j] << endl;
+					  data.extinction_times[offset + j] << '\n';
 				}
 			}
 		}
+		fp_out.flush();
 		output_success += close_output_file(fp_out, "extinction_times");
 		if (params.keep_trajectory_samples == 1) {
 			output_success += open_output_file( \
 			  "population_trajectory" + file_suffix, fp_out, \
 			  "population_trajectory");
-
+			fp_out << "sweep_population_startval,prey,predators" <<  endl;
+			for (long i=0; i<params.sweep_count; ++i) {
+				long offset = i*data.single_group_samples;
+				long sweep_value = sweep_start_value + (i*params.sweep_change);
+				for (long j=0; j<data.single_group_samples; j+=2) {
+					fp_out << sweep_value << "," << \
+					  data.samples[offset + j] << "," << \
+					  data.samples[offset + j + 1] << '\n';
+				}
+			}
+			fp_out.flush();
 			output_success += close_output_file(fp_out, \
 			  "population_trajectory");
 		}
@@ -474,8 +488,46 @@ inline int determine_quadrant(const long*const species_counts_in, \
 	return(quadrant_out);
 }
 
-void simulate_base(const simulation_parameters& params, simulation_data& data) {
+inline long trial_simulation_base(const simulation_parameters& params, \
+  long*const species_counts) {
+	const long timestep_limit = params.max_timesteps;
+	long last_timestep = 0;
+	for (long i=0; i<timestep_limit; ++i) {
+		advance_species(species_counts, params.mu, params.sigma, \
+		  params.lambda);
+		for (int j=0; j<species_types; ++j) {
+			if (species_counts[j] < 1) {
+				species_counts[j] = 0;
+				last_timestep = i + 1;
+			}
+		}
+		if (last_timestep) {
+			break;
+		}
+	}
+	return(last_timestep);
+}
 
+void simulate_base(const simulation_parameters& params, simulation_data& data) {
+	const long sweep_limit = (params.perform_start_number_sweep == 1) ? \
+	  params.sweep_count : 1;
+	const long trial_limit = params.simulation_trials;
+	for (long sweep=0; sweep<sweep_limit; ++sweep) {
+		long prey_start_local = params.prey_start_number;
+		long predator_start_local = params.predator_start_number;
+		for (long trial=0; trial<trial_limit; ++trial) {
+			long species_counts[2] = { \
+				prey_start_local,
+				predator_start_local
+			};
+			long offset = sweep*trial_limit;
+			long last_timestep = trial_simulation_base(params, species_counts);
+			if (last_timestep) {
+				data.extinction_times[offset + trial] = last_timestep;
+			}
+		}
+	}
+	return;
 }
 
 
@@ -526,7 +578,7 @@ int main(int argc, char** argv) {
 
 	//This is the small array that holds the predator and prey counts.
 	//It is updated as the numbers of predator and prey change.
-	long species_counts[2] = {prey_start_number, predator_start_number};
+
 
 	//This initializes the random number generator.
 	autoinit_randgen();
