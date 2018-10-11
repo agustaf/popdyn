@@ -40,7 +40,6 @@ typedef struct simulation_parameters {
 	int keep_extinction_time_histogram;
 	long extinction_time_histogram_length;
 	long extinction_time_histogram_bin_size;
-	int species;
 } simulation_parameters;
 
 typedef struct simulation_data {
@@ -248,7 +247,7 @@ int read_input_parameters(const string& filename, ifstream& fp_in, \
 	}
 	input_success += find_descriptor(fp_in, "predator_start_number=");
 	fp_in >> params.predator_start_number;
-	if (params.predator_start_number != -1) {
+	if (params.predator_start_number == -1) {
 		params.predator_start_number = params.equil_predator;
 		if (params.predator_start_number < 1) {
 			params.predator_start_number = 1;
@@ -338,7 +337,7 @@ int allocate_data_arrays(simulation_data& data_in, \
 		  (static_cast<long>(floor( \
 		    static_cast<double>(params_in.max_timesteps)/ \
 		    static_cast<double>(params_in.sample_interval) \
-		  )) + 1)*params_in.species*params_in.simulation_trials;
+		)) + 1)*species_types*params_in.simulation_trials;
 		const long max_samples = (params_in.perform_start_number_sweep == 1) ? \
 		  params_in.sweep_count*data_in.single_group_samples : \
 		  data_in.single_group_samples;
@@ -488,11 +487,14 @@ inline int determine_quadrant(const long*const species_counts_in, \
 	return(quadrant_out);
 }
 
-inline long trial_simulation_base(const simulation_parameters& params, \
+inline long simulation_run_base(const simulation_parameters& params, \
   long*const species_counts) {
 	const long timestep_limit = params.max_timesteps;
 	long last_timestep = 0;
 	for (long i=0; i<timestep_limit; ++i) {
+		if (i%50 == 0) {
+			cout << i << endl;
+		}
 		advance_species(species_counts, params.mu, params.sigma, \
 		  params.lambda);
 		for (int j=0; j<species_types; ++j) {
@@ -513,15 +515,22 @@ void simulate_base(const simulation_parameters& params, simulation_data& data) {
 	  params.sweep_count : 1;
 	const long trial_limit = params.simulation_trials;
 	for (long sweep=0; sweep<sweep_limit; ++sweep) {
-		long prey_start_local = params.prey_start_number;
-		long predator_start_local = params.predator_start_number;
+		long population_start[2] = {
+			params.prey_start_number,
+			params.predator_start_number
+		};
+		if (params.perform_start_number_sweep == 1) {
+			population_start[params.species_to_sweep] += \
+			  sweep*params.sweep_change;
+		}
 		for (long trial=0; trial<trial_limit; ++trial) {
-			long species_counts[2] = { \
-				prey_start_local,
-				predator_start_local
+			cout << "trial = " << trial << endl;
+			long species_counts[2] = {
+				population_start[0],
+				population_start[1]
 			};
 			long offset = sweep*trial_limit;
-			long last_timestep = trial_simulation_base(params, species_counts);
+			long last_timestep = simulation_run_base(params, species_counts);
 			if (last_timestep) {
 				data.extinction_times[offset + trial] = last_timestep;
 			}
@@ -557,6 +566,8 @@ int main(int argc, char** argv) {
 		params_input.mu,
 		params_input.sigma,
 		params_input.lambda,
+		params_input.equil_prey,
+		params_input.equil_predator,
 		params_input.prey_start_number,
 		params_input.predator_start_number,
 		params_input.max_timesteps,
@@ -570,19 +581,24 @@ int main(int argc, char** argv) {
 		params_input.keep_cycles_to_extinction,
 		params_input.keep_extinction_time_histogram,
 		params_input.extinction_time_histogram_length,
-		params_input.extinction_time_histogram_bin_size,
-		species_types
+		params_input.extinction_time_histogram_bin_size
 	};
 
-
-
-	//This is the small array that holds the predator and prey counts.
-	//It is updated as the numbers of predator and prey change.
-
+	simulation_data data;
+	allocate_data_arrays(data, params);
 
 	//This initializes the random number generator.
 	autoinit_randgen();
 
+	simulate_base(params, data);
+
+	write_data(data, params);
+
+
+	data.~simulation_data();
+
+
+/*
 	long cycle_count(0);
 	long last_timestep(0);
 	long quadrant = determine_quadrant(species_counts, equil_prey, \
@@ -611,13 +627,13 @@ int main(int argc, char** argv) {
 			else if ((previous_quadrant == 0) && (quadrant == 3)){
 				++cycle_count;
 			}
-			/*
+
 			else if (abs(previous_quadrant - quadrant) == two_int) {
 				cout << "quadrant jump, previous = " << previous_quadrant << \
 				  ",  current = " << quadrant <<  ",  timestep = " << \
 				  i << endl;
 			}
-			*/
+
 			if (last_timestep != 0) {
 				break;
 			}
@@ -748,6 +764,7 @@ int main(int argc, char** argv) {
 			fp_out.close();
 		}
 	}
+*/
 
 	return(0);
 }

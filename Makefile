@@ -1,6 +1,6 @@
 
 CXX = g++
-CXX_FLAGS = -std=c++17 -Wall -Wexta -Wpedantic -O3
+CXX_FLAGS = -std=c++17 -Wall -Wextra -Wpedantic -O3
 OUTPUTNAME = popdyn.exe
 
 all: popdyn.cpp Makefile
