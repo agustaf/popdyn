@@ -88,7 +88,7 @@ typedef struct simulation_data {
 
 //The following block of functions assist in reading the input
 //file and checking that input values make sense.
-int find_descriptor(ifstream& fp_in, const string& descriptor) {
+int find_descriptor(ifstream& fp_in, const string& descriptor) noexcept {
 	//This function searches an input file for a keyword descriptor
 	//which precedes an input value.
 	if (!fp_in.is_open()) {
@@ -116,7 +116,7 @@ int find_descriptor(ifstream& fp_in, const string& descriptor) {
 	return(1);
 }
 
-int probrange_check(const double& value, const string& name) {
+int probrange_check(const double& value, const string& name) noexcept {
 	//This function checks that a value is between 0 and 1,
 	//as a probability value should be.
 	if ((value <= 0.0) || (value > 1.0)) {
@@ -127,7 +127,7 @@ int probrange_check(const double& value, const string& name) {
 	return(0);
 }
 
-int positive_longcheck(const long& value, const string& name) {
+int positive_longcheck(const long& value, const string& name) noexcept {
 	//This function checks that a long integer is positive.
 	if (value <= 0) {
 		cout << "Input error, value out of range for integer variable " << \
@@ -137,7 +137,7 @@ int positive_longcheck(const long& value, const string& name) {
 	return(0);
 }
 
-int binary_intcheck(const int value, const string& name) {
+int binary_intcheck(const int value, const string& name) noexcept {
 	//This function checks that an integer is either 0 or 1
 	//and not any other value.
 	if ((value != 0) && (value != 1)) {
@@ -147,7 +147,7 @@ int binary_intcheck(const int value, const string& name) {
 	return(0);
 }
 
-int species_string_check(const string& value, const string& name) {
+int species_string_check(const string& value, const string& name) noexcept {
 	if ((value != "predator") && (value != "prey")) {
 		cout << "Input error, invalid species string choice for " << \
 		  name << endl;
@@ -158,7 +158,7 @@ int species_string_check(const string& value, const string& name) {
 
 
 int open_input_file(const string& filename, ifstream& fp_in, \
-  const string& description) {
+  const string& description) noexcept {
 	if (fp_in.is_open()) {
 		cout << "Error, input file already open for " << description << endl;
 		return(1);
@@ -173,7 +173,7 @@ int open_input_file(const string& filename, ifstream& fp_in, \
 	return(0);
 }
 
-int close_input_file(ifstream& fp_in, const string& description) {
+int close_input_file(ifstream& fp_in, const string& description) noexcept {
 	if (!fp_in.is_open()) {
 		cout << "Error, input file already closed for " << description << endl;
 		return(1);
@@ -188,7 +188,7 @@ int close_input_file(ifstream& fp_in, const string& description) {
 }
 
 int open_output_file(const string& filename, ofstream& fp_out, \
-  const string& description) {
+  const string& description) noexcept {
 	if (fp_out.is_open()) {
 		cout << "Error, output file already open for " << description << endl;
 		return(1);
@@ -203,7 +203,7 @@ int open_output_file(const string& filename, ofstream& fp_out, \
 	return(0);
 }
 
-int close_output_file(ofstream& fp_out, const string& description) {
+int close_output_file(ofstream& fp_out, const string& description) noexcept {
 	if (!fp_out.is_open()) {
 		cout << "Error, output file already closed for " << description << endl;
 		return(1);
@@ -219,7 +219,7 @@ int close_output_file(ofstream& fp_out, const string& description) {
 
 
 int read_input_parameters(const string& filename, ifstream& fp_in, \
-  simulation_parameters& params) {
+  simulation_parameters& params) noexcept {
 	int input_success = 0;
 	input_success += open_input_file(filename, fp_in, "base input file");
 	input_success += find_descriptor(fp_in, "mu=");
@@ -324,7 +324,7 @@ int read_input_parameters(const string& filename, ifstream& fp_in, \
 }
 
 int allocate_data_arrays(simulation_data& data_in, \
-  const simulation_parameters& params_in) {
+  const simulation_parameters& params_in) noexcept {
 	const long max_simulation_count = \
 	  (params_in.perform_start_number_sweep == 1) ? \
 	  params_in.simulation_trials*params_in.sweep_count : \
@@ -366,7 +366,7 @@ int allocate_data_arrays(simulation_data& data_in, \
 
 
 int write_data(const simulation_data& data, \
-  const simulation_parameters& params) {
+  const simulation_parameters& params) noexcept {
 	ostringstream ss;
 	ss.str(string());
 	ss.clear();
@@ -438,7 +438,8 @@ int write_data(const simulation_data& data, \
 }
 
 //The following block of functions assist with the simulation operation.
-inline long direct_binomial(const double& success_prob, const long& trials) {
+inline long direct_binomial(const double& success_prob, \
+  const long& trials) noexcept {
 	//This function calculates a long integer value from
 	//a binomial distribution using the direct method.
 	long count(0);
@@ -450,8 +451,9 @@ inline long direct_binomial(const double& success_prob, const long& trials) {
 	return(count);
 }
 
-inline void advance_species(long*const species_counts_in, \
-  const double& mu_in, const double& sigma_in, const double& lambda_in){
+inline void advance_species(long*const __restrict__ species_counts_in, \
+  const double& mu_in, const double& sigma_in, 
+  const double& lambda_in) noexcept {
 	//This function advances the predator and prey counts, using the
 	//input probabilities and the direct binomial probability calculation.
 	const long mu_change = direct_binomial(mu_in, species_counts_in[0]);
@@ -463,8 +465,8 @@ inline void advance_species(long*const species_counts_in, \
 	return;
 }
 
-inline int determine_quadrant(const long*const species_counts_in, \
-  const long& equil_prey_in, const long& equil_predator_in) {
+inline int quadrant(const long*const __restrict__ species_counts_in, \
+  const long& equil_prey_in, const long& equil_predator_in) noexcept {
 	//This function determines what "quadrant" the
 	//predator prey system is in.
 	int quadrant_out = -1;
@@ -488,7 +490,7 @@ inline int determine_quadrant(const long*const species_counts_in, \
 }
 
 inline long simulation_run_base(const simulation_parameters& params, \
-  long*const species_counts) {
+  long*const __restrict__ species_counts) noexcept {
 	const long timestep_limit = params.max_timesteps;
 	long last_timestep = 0;
 	for (long i=0; i<timestep_limit; ++i) {
@@ -510,7 +512,8 @@ inline long simulation_run_base(const simulation_parameters& params, \
 	return(last_timestep);
 }
 
-void simulate_base(const simulation_parameters& params, simulation_data& data) {
+void simulate_base(const simulation_parameters& params, \
+  simulation_data& data) noexcept {
 	const long sweep_limit = (params.perform_start_number_sweep == 1) ? \
 	  params.sweep_count : 1;
 	const long trial_limit = params.simulation_trials;

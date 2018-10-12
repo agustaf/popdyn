@@ -14,7 +14,7 @@ sample_interval= 10
 
 perform_start_number_sweep= 1
 species_to_sweep= prey
-sweep_count= 5
+sweep_count= 1
 sweep_change= 10
 
 keep_cycles_to_extinction= 0
