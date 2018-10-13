@@ -264,16 +264,6 @@ int read_input_parameters(const string& filename, ifstream& fp_in, \
 	fp_in >> params.simulation_trials;
 	input_success += positive_longcheck(params.simulation_trials, \
 	  "simulation_trials");
-	input_success += find_descriptor(fp_in, "keep_trajectory_samples=");
-	fp_in >> params.keep_trajectory_samples;
-	input_success += binary_intcheck(params.keep_trajectory_samples, \
-	  "keep_trajectory_samples");
-	if (params.keep_trajectory_samples == 1) {
-		input_success += find_descriptor(fp_in, "sample_interval=");
-		fp_in >> params.sample_interval;
-		input_success += positive_longcheck(params.sample_interval, \
-		  "sample_interval");
-	}
 	input_success += find_descriptor(fp_in, "perform_start_number_sweep=");
 	fp_in >> params.perform_start_number_sweep;
 	input_success += binary_intcheck(params.perform_start_number_sweep, \
@@ -291,6 +281,16 @@ int read_input_parameters(const string& filename, ifstream& fp_in, \
 		input_success += positive_longcheck(params.sweep_count, "sweep_count");
 		input_success += find_descriptor(fp_in, "sweep_change=");
 		fp_in >> params.sweep_change;
+	}
+	input_success += find_descriptor(fp_in, "keep_trajectory_samples=");
+	fp_in >> params.keep_trajectory_samples;
+	input_success += binary_intcheck(params.keep_trajectory_samples, \
+	  "keep_trajectory_samples");
+	if (params.keep_trajectory_samples == 1) {
+		input_success += find_descriptor(fp_in, "sample_interval=");
+		fp_in >> params.sample_interval;
+		input_success += positive_longcheck(params.sample_interval, \
+		  "sample_interval");
 	}
 	input_success += find_descriptor(fp_in, "keep_cycles_to_extinction=");
 	fp_in >> params.keep_cycles_to_extinction;
@@ -419,16 +419,75 @@ int write_data(const simulation_data& data, \
 			output_success += close_output_file(fp_out, \
 			  "population_trajectory");
 		}
+		if (params.keep_cycles_to_extinction == 1) {
+			output_success += open_output_file( \
+			  "cycles_to_extinction" + file_suffix, fp_out, \
+			  "cycles_to_extinction");
+			fp_out << "sweep_population_startval,cycles_to_extinction" << endl;
+			for (long i=0; i<params.sweep_count; ++i) {
+				long offset = i*params.simulation_trials;
+				long sweep_value = sweep_start_value + (i*params.sweep_change);
+				for (long j=0; j<params.simulation_trials; ++j) {
+					if (data.max_cycles_list[offset + j] > neg_one_long) {
+						fp_out << sweep_value << "," << \
+						  data.max_cycles_list[offset + j] << '\n';
+					}
+				}
+			}
+			fp_out.flush();
+			output_success += close_output_file(fp_out, \
+			  "cycles_to_extinction");
+		}
 	}
 	else {
 		output_success += open_output_file("extinction_times" + file_suffix, \
 		  fp_out, "extinction_times");
 		for (long j=0; j<params.simulation_trials; ++j) {
   			if (data.extinction_times[j] > 0) {
-  				fp_out << data.extinction_times[j] << endl;
+  				fp_out << data.extinction_times[j] << '\n';
   			}
   		}
+		fp_out.flush();
 		output_success += close_output_file(fp_out, "extinction_times");
+		if (params.keep_trajectory_samples == 1) {
+			output_success += open_output_file( \
+			  "population_trajectory" + file_suffix, fp_out, \
+			  "population_trajectory");
+			fp_out << "prey,predators" <<  endl;
+			for (long j=0; j<data.single_group_samples; j+=2) {
+				fp_out << data.samples[j] << "," << \
+				  data.samples[j + 1] << '\n';
+			}
+			fp_out.flush();
+			output_success += close_output_file(fp_out, \
+			  "population_trajectory");
+		}
+		if (params.keep_cycles_to_extinction == 1) {
+			output_success += open_output_file( \
+			  "cycles_to_extinction" + file_suffix, fp_out, \
+			  "cycles_to_extinction");
+			fp_out << "cycles_to_extinction" << endl;
+			for (long j=0; j<params.simulation_trials; ++j) {
+				if (data.max_cycles_list[j] > neg_one_long) {
+					fp_out << data.max_cycles_list[j] << '\n';
+				}
+			}
+			fp_out.flush();
+			output_success += close_output_file(fp_out, \
+			  "cycles_to_extinction");
+		}
+	}
+	if (params.keep_extinction_time_histogram == 1) {
+		output_success += open_output_file( \
+		  "extinction_time_histogram" + file_suffix, fp_out, \
+		  "extinction_time_histogram");
+		for (long i=0; i<params.extinction_time_histogram_length; ++i) {
+			fp_out << i*params.extinction_time_histogram_bin_size << " " \
+			  << data.extinction_time_histogram[i] << '\n';
+		}
+		fp_out.flush();
+		output_success += close_output_file(fp_out, \
+		  "extinction_time_histogram");
 	}
 	if (output_success) {
 		cout << "Error in writing data output." << endl;
@@ -452,7 +511,7 @@ inline long direct_binomial(const double& success_prob, \
 }
 
 inline void advance_species(long*const __restrict__ species_counts_in, \
-  const double& mu_in, const double& sigma_in, 
+  const double& mu_in, const double& sigma_in,
   const double& lambda_in) noexcept {
 	//This function advances the predator and prey counts, using the
 	//input probabilities and the direct binomial probability calculation.

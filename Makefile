@@ -1,7 +1,8 @@
 
 CXX = g++
 CXX_FLAGS = -std=c++11 -O3 -Wall -Wextra -Wpedantic -Wno-unused-function \
-            -Wno-unused-const-variable -fvisibility=hidden
+            -Wno-unused-const-variable -fvisibility=hidden -fno-exceptions \
+            -fno-rtti -march=native -ftree-vectorize
 
 CXX_GCC = g++
 CXX_FLAGS_GCC = -std=c++11 -O3 -Wall -Wextra -Wpedantic -Waggregate-return \
