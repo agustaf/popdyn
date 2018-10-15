@@ -11,13 +11,23 @@ using namespace randgenbase;
 
 #include "./Random_Number_Generators/randgen.cpp"
 
+//These are compile-time constant definitions for use in the simulation.
 constexpr int species_types = 2;
+constexpr int prey_int = 0;
+constexpr int predator_int = 1;
+constexpr int false_int = 0;
+constexpr int true_int = 1;
+constexpr long use_equil_vals_long = -1;
 constexpr double zero_double = 0.0;
+constexpr double one_double = 1.0;
 constexpr int zero_int = 0;
+constexpr int one_int = 1;
 constexpr long zero_long = 0;
 constexpr long one_long = 1;
 constexpr long neg_one_long = -1;
 
+
+//The following block of code contains the data structures for the simulation.
 typedef struct simulation_parameters {
 	//This struct holds the simulation input parameters.
 	public:
@@ -43,13 +53,14 @@ typedef struct simulation_parameters {
 } simulation_parameters;
 
 typedef struct simulation_data {
-	//This is a struct to hold the gathered simulation data.
+	//This struct holds the results data from the simulation.
 	public:
 	long* extinction_times;
 	long* extinction_time_histogram;
-	long* sweep_average_extinction_times;
+	double* sweep_average_extinction_times;
 	long* max_cycles_list;
 	long* samples;
+	long single_run_samples;
 	long single_group_samples;
 	~simulation_data() {
 		if (extinction_times) {
@@ -80,6 +91,7 @@ typedef struct simulation_data {
 		sweep_average_extinction_times = nullptr;
 		max_cycles_list = nullptr;
 		samples = nullptr;
+		single_run_samples = zero_long;
 		single_group_samples = zero_long;
 		return;
 	}
@@ -88,6 +100,76 @@ typedef struct simulation_data {
 
 //The following block of functions assist in reading the input
 //file and checking that input values make sense.
+int open_input_file(const string& filename, ifstream& fp_in, \
+  const string& description) noexcept {
+	//This function opens a file to read it, 
+	//and checks that it opened correctly.
+	if (fp_in.is_open()) {
+		cout << "Error, input file already open for " << description << endl;
+		return(1);
+	}
+	fp_in.open(filename, ios::in);
+	if (!fp_in.is_open()) {
+		cout << "Error, input file failed to open for " << description << endl;
+		return(1);
+	}
+	fp_in.clear();
+	fp_in.seekg(0, ios::beg);
+	return(0);
+}
+
+int close_input_file(ifstream& fp_in, const string& description) noexcept {
+	//This function closes a file which was opened for reading,
+	//and checks that it closed correctly.
+	if (!fp_in.is_open()) {
+		cout << "Error, input file already closed for " << description << endl;
+		return(1);
+	}
+	fp_in.close();
+	if (fp_in.is_open()) {
+		cout << "Error, input file failed to close for " << description << \
+		  endl;
+		return(1);
+	}
+	return(0);
+}
+
+int open_output_file(const string& filename, ofstream& fp_out, \
+  const string& description) noexcept {
+	//This function opens a file to write to it,
+	//and check that it opened correctly.
+	if (fp_out.is_open()) {
+		cout << "Error, output file already open for " << description << endl;
+		return(1);
+	}
+	fp_out.open(filename, ios::out);
+	if (!fp_out.is_open()) {
+		cout << "Error, output file failed to open for " << description << \
+		  endl;
+		return(1);
+	}
+	fp_out.clear();
+	fp_out.seekp(0, ios::beg);
+	return(0);
+}
+
+int close_output_file(ofstream& fp_out, const string& description) noexcept {
+	//This function closes a file which was opened for writing,
+	//and checks that it closed correctly.
+	if (!fp_out.is_open()) {
+		cout << "Error, output file already closed for " << description << \
+		  endl;
+		return(1);
+	}
+	fp_out.close();
+	if (fp_out.is_open()) {
+		cout << "Error, output file failed to close for " << description << \
+		  endl;
+		return(1);
+	}
+	return(0);
+}
+
 int find_descriptor(ifstream& fp_in, const string& descriptor) noexcept {
 	//This function searches an input file for a keyword descriptor
 	//which precedes an input value.
@@ -117,10 +199,10 @@ int find_descriptor(ifstream& fp_in, const string& descriptor) noexcept {
 }
 
 int probrange_check(const double& value, const string& name) noexcept {
-	//This function checks that a value is between 0 and 1,
+	//This function checks that a double value is between 0 and 1,
 	//as a probability value should be.
-	if ((value <= 0.0) || (value > 1.0)) {
-		cout << "Input error, value out of range for double variable " <<  \
+	if ((value <= zero_double) || (value > one_double)) {
+		cout << "Input error, value out of range for double variable " << \
 		  name << endl;
 		return(1);
 	}
@@ -148,7 +230,8 @@ int binary_intcheck(const int value, const string& name) noexcept {
 }
 
 int species_string_check(const string& value, const string& name) noexcept {
-	if ((value != "predator") && (value != "prey")) {
+	//This function checks that a string is either "prey" or "predator".
+	if ((value != "prey") && (value != "predator")) {
 		cout << "Input error, invalid species string choice for " << \
 		  name << endl;
 		return(1);
@@ -156,70 +239,10 @@ int species_string_check(const string& value, const string& name) noexcept {
 	return(0);
 }
 
-
-int open_input_file(const string& filename, ifstream& fp_in, \
-  const string& description) noexcept {
-	if (fp_in.is_open()) {
-		cout << "Error, input file already open for " << description << endl;
-		return(1);
-	}
-	fp_in.open(filename, ios::in);
-	if (!fp_in.is_open()) {
-		cout << "Error, input file failed to open for " << description << endl;
-		return(1);
-	}
-	fp_in.clear();
-	fp_in.seekg(0, ios::beg);
-	return(0);
-}
-
-int close_input_file(ifstream& fp_in, const string& description) noexcept {
-	if (!fp_in.is_open()) {
-		cout << "Error, input file already closed for " << description << endl;
-		return(1);
-	}
-	fp_in.close();
-	if (fp_in.is_open()) {
-		cout << "Error, input file failed to close for " << description << \
-		  endl;
-		return(1);
-	}
-	return(0);
-}
-
-int open_output_file(const string& filename, ofstream& fp_out, \
-  const string& description) noexcept {
-	if (fp_out.is_open()) {
-		cout << "Error, output file already open for " << description << endl;
-		return(1);
-	}
-	fp_out.open(filename, ios::out);
-	if (!fp_out.is_open()) {
-		cout << "Error, output file failed to open for " << description << endl;
-		return(1);
-	}
-	fp_out.clear();
-	fp_out.seekp(0, ios::beg);
-	return(0);
-}
-
-int close_output_file(ofstream& fp_out, const string& description) noexcept {
-	if (!fp_out.is_open()) {
-		cout << "Error, output file already closed for " << description << endl;
-		return(1);
-	}
-	fp_out.close();
-	if (fp_out.is_open()) {
-		cout << "Error, output file failed to close for " << description << \
-		  endl;
-		return(1);
-	}
-	return(0);
-}
-
-
 int read_input_parameters(const string& filename, ifstream& fp_in, \
   simulation_parameters& params) noexcept {
+	//This function reads the input parameter for the simulation,
+	//and stores the input in a simulation_parameters data structure.
 	int input_success = 0;
 	input_success += open_input_file(filename, fp_in, "base input file");
 	input_success += find_descriptor(fp_in, "mu=");
@@ -235,7 +258,7 @@ int read_input_parameters(const string& filename, ifstream& fp_in, \
 	params.equil_predator = static_cast<long>(floor(params.mu/params.lambda));
 	input_success += find_descriptor(fp_in, "prey_start_number=");
 	fp_in >> params.prey_start_number;
-	if (params.prey_start_number == -1) {
+	if (params.prey_start_number == use_equil_vals_long) {
 		params.prey_start_number = params.equil_prey;
 		if (params.prey_start_number < 1) {
 			params.prey_start_number = 1;
@@ -247,7 +270,7 @@ int read_input_parameters(const string& filename, ifstream& fp_in, \
 	}
 	input_success += find_descriptor(fp_in, "predator_start_number=");
 	fp_in >> params.predator_start_number;
-	if (params.predator_start_number == -1) {
+	if (params.predator_start_number == use_equil_vals_long) {
 		params.predator_start_number = params.equil_predator;
 		if (params.predator_start_number < 1) {
 			params.predator_start_number = 1;
@@ -268,7 +291,7 @@ int read_input_parameters(const string& filename, ifstream& fp_in, \
 	fp_in >> params.perform_start_number_sweep;
 	input_success += binary_intcheck(params.perform_start_number_sweep, \
 	  "perform_start_number_sweep");
-	if (params.perform_start_number_sweep == 1) {
+	if (params.perform_start_number_sweep == true_int) {
 		input_success += find_descriptor(fp_in, "species_to_sweep=");
 		string species_to_sweep_input = "";
 		fp_in >> species_to_sweep_input;
@@ -286,11 +309,17 @@ int read_input_parameters(const string& filename, ifstream& fp_in, \
 	fp_in >> params.keep_trajectory_samples;
 	input_success += binary_intcheck(params.keep_trajectory_samples, \
 	  "keep_trajectory_samples");
-	if (params.keep_trajectory_samples == 1) {
+	if (params.keep_trajectory_samples == true_int) {
 		input_success += find_descriptor(fp_in, "sample_interval=");
 		fp_in >> params.sample_interval;
 		input_success += positive_longcheck(params.sample_interval, \
 		  "sample_interval");
+		if (params.sample_interval > params.max_timesteps) {
+			cout << "Error, trajectory sample_interval greater than ";
+			cout << "max_timesteps" << endl;
+			input_success += 1;
+			return(1);
+		}
 	}
 	input_success += find_descriptor(fp_in, "keep_cycles_to_extinction=");
 	fp_in >> params.keep_cycles_to_extinction;
@@ -300,7 +329,7 @@ int read_input_parameters(const string& filename, ifstream& fp_in, \
 	fp_in >> params.keep_extinction_time_histogram;
 	input_success += binary_intcheck(params.keep_extinction_time_histogram, \
 	  "keep_extinction_time_histogram");
-	if (params.keep_extinction_time_histogram == 1) {
+	if (params.keep_extinction_time_histogram == true_int) {
 		input_success += find_descriptor(fp_in, \
 		  "extinction_time_histogram_length=");
 		fp_in >> params.extinction_time_histogram_length;
@@ -323,68 +352,80 @@ int read_input_parameters(const string& filename, ifstream& fp_in, \
 	return(0);
 }
 
+
+//The following block of functions assist with allocating memory for
+//results data, and writing results data to files.
 int allocate_data_arrays(simulation_data& data_in, \
   const simulation_parameters& params_in) noexcept {
+	//This function allocates data arrays for results data
+	//within a simulation_data data structure.
 	const long max_simulation_count = \
-	  (params_in.perform_start_number_sweep == 1) ? \
+	  (params_in.perform_start_number_sweep == true_int) ? \
 	  params_in.simulation_trials*params_in.sweep_count : \
 	  params_in.simulation_trials;
 	data_in.extinction_times = new long[max_simulation_count];
 	fill(data_in.extinction_times, \
-		  data_in.extinction_times + max_simulation_count, -1);
-	if (params_in.keep_trajectory_samples == 1) {
-		data_in.single_group_samples = \
-		  (static_cast<long>(floor( \
-		    static_cast<double>(params_in.max_timesteps)/ \
-		    static_cast<double>(params_in.sample_interval) \
-		)) + 1)*species_types*params_in.simulation_trials;
-		const long max_samples = (params_in.perform_start_number_sweep == 1) ? \
+		  data_in.extinction_times + max_simulation_count, neg_one_long);
+	if (params_in.keep_trajectory_samples == true_int) {
+		const double sample_count_double = \
+		  floor(static_cast<double>(params_in.max_timesteps)/ \
+		  static_cast<double>(params_in.sample_interval));
+		data_in.single_run_samples = \
+		  species_types*(static_cast<long>(sample_count_double) + 1);
+		data_in.single_group_samples = data_in.single_run_samples* \
+		  params_in.simulation_trials;
+		const long max_samples = \
+		  (params_in.perform_start_number_sweep == true_int) ? \
 		  params_in.sweep_count*data_in.single_group_samples : \
 		  data_in.single_group_samples;
 		data_in.samples = new long[max_samples];
-		fill(data_in.samples, data_in.samples + max_samples, -1);
+		fill(data_in.samples, data_in.samples + max_samples, neg_one_long);
 	}
-	if (params_in.perform_start_number_sweep == 1) {
-  		data_in.sweep_average_extinction_times = new long[max_simulation_count];
-  		fill(data_in.sweep_average_extinction_times, \
-		  data_in.sweep_average_extinction_times + max_simulation_count, -1);
+	if (params_in.perform_start_number_sweep == true_int) {
+		data_in.sweep_average_extinction_times = \
+		  new double[params_in.sweep_count];
+		fill(data_in.sweep_average_extinction_times, \
+		  data_in.sweep_average_extinction_times + params_in.sweep_count, \
+		  neg_one_long);
 	}
-	if (params_in.keep_cycles_to_extinction == 1) {
+	if (params_in.keep_cycles_to_extinction == true_int) {
 		data_in.max_cycles_list = new long[max_simulation_count];
 		fill(data_in.max_cycles_list, \
-		  data_in.max_cycles_list + max_simulation_count, -1);
+		  data_in.max_cycles_list + max_simulation_count, neg_one_long);
 	}
-	if (params_in.keep_extinction_time_histogram == 1) {
+	if (params_in.keep_extinction_time_histogram == true_int) {
 		data_in.extinction_time_histogram = \
 		  new long[params_in.extinction_time_histogram_length];
 		fill(data_in.extinction_time_histogram, \
 		  data_in.extinction_time_histogram + \
-		  params_in.extinction_time_histogram_length, 0);
+		  params_in.extinction_time_histogram_length, zero_long);
 	}
 	return(0);
 }
 
-
 int write_data(const simulation_data& data, \
   const simulation_parameters& params) noexcept {
+	//This function writes results data from a simulation_data
+	//data structure to files.
 	ostringstream ss;
 	ss.str(string());
 	ss.clear();
 	ss << "_mu" << params.mu << "_sigma" << params.sigma << "_lambda" << \
 	  params.lambda << "_preystart" << params.prey_start_number << \
 	  "_predatorstart" << params.predator_start_number;
-	if (params.perform_start_number_sweep == 1) {
-		const string sweep_species = (params.species_to_sweep == 0) ? \
+	if (params.perform_start_number_sweep == true_int) {
+		const string sweep_species = (params.species_to_sweep == prey_int) ? \
 		  "prey" : "predator";
-		ss << "sweep" << sweep_species << "_schange" << params.sweep_change;
+		ss << "_sweep" << sweep_species << "_schange" << params.sweep_change;
 	}
 	const string file_suffix = ss.str() + ".txt";
 	ss.str(string());
 	ss.clear();
 	ofstream fp_out;
 	int output_success = 0;
-	if (params.perform_start_number_sweep == 1) {
-		const long sweep_start_value = (params.species_to_sweep == 0) ? \
+	if (params.perform_start_number_sweep == true_int) {
+		const long sweep_start_value = \
+		  (params.species_to_sweep == prey_int) ? \
 		  params.prey_start_number : params.predator_start_number;
 		output_success += open_output_file("extinction_times" + file_suffix, \
 		  fp_out, "extinction_times");
@@ -401,7 +442,19 @@ int write_data(const simulation_data& data, \
 		}
 		fp_out.flush();
 		output_success += close_output_file(fp_out, "extinction_times");
-		if (params.keep_trajectory_samples == 1) {
+		output_success += \
+		  open_output_file("sweep_average_extinction_times" + file_suffix, \
+		  fp_out, "sweep_average_extinction_times");
+		fp_out << "sweep_population_startval,average_extinction_time" << endl;
+		for (long i=0; i<params.sweep_count; ++i) {
+			long sweep_value = sweep_start_value + (i*params.sweep_change);
+			fp_out << sweep_value << "," << \
+			  data.sweep_average_extinction_times;
+		}
+		fp_out.flush();
+		output_success += \
+		  close_output_file(fp_out, "sweep_average_extinction_times");
+		if (params.keep_trajectory_samples == true_int) {
 			output_success += open_output_file( \
 			  "population_trajectory" + file_suffix, fp_out, \
 			  "population_trajectory");
@@ -410,16 +463,18 @@ int write_data(const simulation_data& data, \
 				long offset = i*data.single_group_samples;
 				long sweep_value = sweep_start_value + (i*params.sweep_change);
 				for (long j=0; j<data.single_group_samples; j+=2) {
-					fp_out << sweep_value << "," << \
-					  data.samples[offset + j] << "," << \
-					  data.samples[offset + j + 1] << '\n';
+					if (data.samples[offset + j] > neg_one_long) {
+						fp_out << sweep_value << "," << \
+						  data.samples[offset + j] << "," << \
+						  data.samples[offset + j + 1] << '\n';
+					}
 				}
 			}
 			fp_out.flush();
 			output_success += close_output_file(fp_out, \
 			  "population_trajectory");
 		}
-		if (params.keep_cycles_to_extinction == 1) {
+		if (params.keep_cycles_to_extinction == true_int) {
 			output_success += open_output_file( \
 			  "cycles_to_extinction" + file_suffix, fp_out, \
 			  "cycles_to_extinction");
@@ -443,26 +498,28 @@ int write_data(const simulation_data& data, \
 		output_success += open_output_file("extinction_times" + file_suffix, \
 		  fp_out, "extinction_times");
 		for (long j=0; j<params.simulation_trials; ++j) {
-  			if (data.extinction_times[j] > 0) {
-  				fp_out << data.extinction_times[j] << '\n';
-  			}
-  		}
+			if (data.extinction_times[j] > neg_one_long) {
+				fp_out << data.extinction_times[j] << '\n';
+			}
+		}
 		fp_out.flush();
 		output_success += close_output_file(fp_out, "extinction_times");
-		if (params.keep_trajectory_samples == 1) {
+		if (params.keep_trajectory_samples == true_int) {
 			output_success += open_output_file( \
 			  "population_trajectory" + file_suffix, fp_out, \
 			  "population_trajectory");
 			fp_out << "prey,predators" <<  endl;
 			for (long j=0; j<data.single_group_samples; j+=2) {
-				fp_out << data.samples[j] << "," << \
-				  data.samples[j + 1] << '\n';
+				if (data.samples[j] > neg_one_long) {
+					fp_out << data.samples[j] << "," << \
+					  data.samples[j + 1] << '\n';
+				}
 			}
 			fp_out.flush();
 			output_success += close_output_file(fp_out, \
 			  "population_trajectory");
 		}
-		if (params.keep_cycles_to_extinction == 1) {
+		if (params.keep_cycles_to_extinction == true_int) {
 			output_success += open_output_file( \
 			  "cycles_to_extinction" + file_suffix, fp_out, \
 			  "cycles_to_extinction");
@@ -477,7 +534,7 @@ int write_data(const simulation_data& data, \
 			  "cycles_to_extinction");
 		}
 	}
-	if (params.keep_extinction_time_histogram == 1) {
+	if (params.keep_extinction_time_histogram == true_int) {
 		output_success += open_output_file( \
 		  "extinction_time_histogram" + file_suffix, fp_out, \
 		  "extinction_time_histogram");
@@ -496,12 +553,13 @@ int write_data(const simulation_data& data, \
 	return(0);
 }
 
+
 //The following block of functions assist with the simulation operation.
 inline long direct_binomial(const double& success_prob, \
   const long& trials) noexcept {
 	//This function calculates a long integer value from
 	//a binomial distribution using the direct method.
-	long count(0);
+	long count = 0;
 	for (long i=0; i<trials; ++i) {
 		if (randgen() < success_prob) {
 			++count;
@@ -529,8 +587,8 @@ inline int quadrant(const long*const __restrict__ species_counts_in, \
 	//This function determines what "quadrant" the
 	//predator prey system is in.
 	int quadrant_out = -1;
-	if (species_counts_in[1] > equil_predator_in) {
-		if (species_counts_in[0] > equil_prey_in) {
+	if (species_counts_in[predator_int] > equil_predator_in) {
+		if (species_counts_in[prey_int] > equil_prey_in) {
 			quadrant_out = 2;
 		}
 		else {
@@ -538,7 +596,7 @@ inline int quadrant(const long*const __restrict__ species_counts_in, \
 		}
 	}
 	else{
-		if (species_counts_in[0] > equil_prey_in) {
+		if (species_counts_in[prey_int] > equil_prey_in) {
 			quadrant_out = 3;
 		}
 		else{
@@ -558,11 +616,13 @@ inline long simulation_run_base(const simulation_parameters& params, \
 		}
 		advance_species(species_counts, params.mu, params.sigma, \
 		  params.lambda);
-		for (int j=0; j<species_types; ++j) {
-			if (species_counts[j] < 1) {
-				species_counts[j] = 0;
-				last_timestep = i + 1;
-			}
+		if (species_counts[0] < 1) {
+			species_counts[0] = 0;
+			last_timestep = i + 1;
+		}
+		if (species_counts[1] < 1) {
+			species_counts[1] = 0;
+			last_timestep = i + 1;
 		}
 		if (last_timestep) {
 			break;
@@ -571,17 +631,60 @@ inline long simulation_run_base(const simulation_parameters& params, \
 	return(last_timestep);
 }
 
+inline long simulation_run_keep_trajectory( \
+  const simulation_parameters& params, simulation_data& data, \
+  long*const __restrict__ species_counts, const long& run_index) noexcept {
+	const long timestep_limit = params.max_timesteps;
+	const long sample_interval_limit = params.sample_interval;
+	const long offset = run_index*data.single_run_samples;
+	long last_timestep = 0;
+	long trigger_index = 0;
+	long local_sample_count = 0;
+	for (long i=0; i<timestep_limit; ++i) {
+		advance_species(species_counts, params.mu, params.sigma, \
+		  params.lambda);
+		if (species_counts[0] < 1) {
+			species_counts[0] = 0;
+			last_timestep = i + 1;
+		}
+		if (species_counts[1] < 1) {
+			species_counts[1] = 0;
+			last_timestep = i + 1;
+		}
+		if (last_timestep) {
+			data.samples[offset + local_sample_count] = \
+			  species_counts[prey_int];
+			data.samples[offset + local_sample_count + 1] = \
+			  species_counts[predator_int];
+			break;
+		}
+		++trigger_index;
+		if (trigger_index == sample_interval_limit) {
+			data.samples[offset + local_sample_count] = \
+			  species_counts[prey_int];
+			data.samples[offset + local_sample_count + 1] = \
+			  species_counts[predator_int];
+			++local_sample_count;
+			trigger_index = 0;
+		}
+	}
+	return(last_timestep);
+}
+
 void simulate_base(const simulation_parameters& params, \
   simulation_data& data) noexcept {
-	const long sweep_limit = (params.perform_start_number_sweep == 1) ? \
+	const long sweep_limit = \
+	  (params.perform_start_number_sweep == true_int) ? \
 	  params.sweep_count : 1;
 	const long trial_limit = params.simulation_trials;
 	for (long sweep=0; sweep<sweep_limit; ++sweep) {
+		double average_extinction_time = 0.0;
+		long sweep_extinction_count = 0;
 		long population_start[2] = {
 			params.prey_start_number,
 			params.predator_start_number
 		};
-		if (params.perform_start_number_sweep == 1) {
+		if (params.perform_start_number_sweep == true_int) {
 			population_start[params.species_to_sweep] += \
 			  sweep*params.sweep_change;
 		}
@@ -595,10 +698,51 @@ void simulate_base(const simulation_parameters& params, \
 			long last_timestep = simulation_run_base(params, species_counts);
 			if (last_timestep) {
 				data.extinction_times[offset + trial] = last_timestep;
+				average_extinction_time += static_cast<double>(last_timestep);
+				++sweep_extinction_count;
 			}
 		}
+		average_extinction_time /= static_cast<double>(sweep_extinction_count);
+		data.sweep_average_extinction_times[sweep] = average_extinction_time;
 	}
 	return;
+}
+
+void simulate_keep_trajectory(const simulation_parameters& params, \
+  simulation_data& data) noexcept {
+	const long sweep_limit = \
+	  (params.perform_start_number_sweep == true_int) ? \
+	  params.sweep_count : 1;
+	const long trial_limit = params.simulation_trials;
+	for (long sweep=0; sweep<sweep_limit; ++sweep) {
+		double average_extinction_time = 0.0;
+		long sweep_extinction_count = 0;
+		long population_start[2] = {
+			params.prey_start_number,
+			params.predator_start_number
+		};
+		if (params.perform_start_number_sweep == true_int) {
+			population_start[params.species_to_sweep] += \
+			  sweep*params.sweep_change;
+		}
+		for (long trial=0; trial<trial_limit; ++trial) {
+			cout << "trial = " << trial << endl;
+			long species_counts[2] = {
+				population_start[0],
+				population_start[1]
+			};
+			long run_index = sweep*trial_limit + trial;
+			long last_timestep = simulation_run_keep_trajectory(params, data, \
+			  species_counts, run_index);
+			if (last_timestep) {
+				data.extinction_times[run_index] = last_timestep;
+				average_extinction_time += static_cast<double>(last_timestep);
+				++sweep_extinction_count;
+			}
+		}
+		average_extinction_time /= static_cast<double>(sweep_extinction_count);
+		data.sweep_average_extinction_times[sweep] = average_extinction_time;
+	}
 }
 
 
@@ -624,6 +768,8 @@ int main(int argc, char** argv) {
 		return(1);
 	}
 
+	//This casts to input parameters into an immutable data structure,
+	//to be certain they can't change in the rest of program operation.
 	const simulation_parameters params = {
 		params_input.mu,
 		params_input.sigma,
@@ -646,19 +792,29 @@ int main(int argc, char** argv) {
 		params_input.extinction_time_histogram_bin_size
 	};
 
+	//This declares and allocates the data structures for holding results.
 	simulation_data data;
 	allocate_data_arrays(data, params);
 
 	//This initializes the random number generator.
 	autoinit_randgen();
 
-	simulate_base(params, data);
+	//This performs the simulation.
+	if (params.keep_trajectory_samples == true_int) {
+		simulate_keep_trajectory(params, data);
+	}
+	else {
+		simulate_base(params, data);
+	}
 
+	//This writes the results data to files.
 	write_data(data, params);
 
-
+	//This frees the memory holding the results data.
 	data.~simulation_data();
 
+	return(0);
+}
 
 /*
 	long cycle_count(0);
@@ -827,6 +983,3 @@ int main(int argc, char** argv) {
 		}
 	}
 */
-
-	return(0);
-}
