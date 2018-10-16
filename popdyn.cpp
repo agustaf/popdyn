@@ -102,7 +102,7 @@ typedef struct simulation_data {
 //file and checking that input values make sense.
 int open_input_file(const string& filename, ifstream& fp_in, \
   const string& description) noexcept {
-	//This function opens a file to read it, 
+	//This function opens a file to read it,
 	//and checks that it opened correctly.
 	if (fp_in.is_open()) {
 		cout << "Error, input file already open for " << description << endl;
@@ -449,7 +449,7 @@ int write_data(const simulation_data& data, \
 		for (long i=0; i<params.sweep_count; ++i) {
 			long sweep_value = sweep_start_value + (i*params.sweep_change);
 			fp_out << sweep_value << "," << \
-			  data.sweep_average_extinction_times;
+			  data.sweep_average_extinction_times[i] << '\n';
 		}
 		fp_out.flush();
 		output_success += \
@@ -609,11 +609,11 @@ inline int quadrant(const long*const __restrict__ species_counts_in, \
 inline long simulation_run_base(const simulation_parameters& params, \
   long*const __restrict__ species_counts) noexcept {
 	const long timestep_limit = params.max_timesteps;
-	long last_timestep = 0;
+	long last_timestep = neg_one_long;
 	for (long i=0; i<timestep_limit; ++i) {
-		if (i%50 == 0) {
+		/*if (i%50 == 0) {
 			cout << i << endl;
-		}
+		}*/
 		advance_species(species_counts, params.mu, params.sigma, \
 		  params.lambda);
 		if (species_counts[0] < 1) {
@@ -624,7 +624,7 @@ inline long simulation_run_base(const simulation_parameters& params, \
 			species_counts[1] = 0;
 			last_timestep = i + 1;
 		}
-		if (last_timestep) {
+		if (last_timestep > neg_one_long) {
 			break;
 		}
 	}
@@ -637,7 +637,7 @@ inline long simulation_run_keep_trajectory( \
 	const long timestep_limit = params.max_timesteps;
 	const long sample_interval_limit = params.sample_interval;
 	const long offset = run_index*data.single_run_samples;
-	long last_timestep = 0;
+	long last_timestep = neg_one_long;
 	long trigger_index = 0;
 	long local_sample_count = 0;
 	for (long i=0; i<timestep_limit; ++i) {
@@ -651,7 +651,7 @@ inline long simulation_run_keep_trajectory( \
 			species_counts[1] = 0;
 			last_timestep = i + 1;
 		}
-		if (last_timestep) {
+		if (last_timestep > neg_one_long) {
 			data.samples[offset + local_sample_count] = \
 			  species_counts[prey_int];
 			data.samples[offset + local_sample_count + 1] = \
@@ -664,7 +664,7 @@ inline long simulation_run_keep_trajectory( \
 			  species_counts[prey_int];
 			data.samples[offset + local_sample_count + 1] = \
 			  species_counts[predator_int];
-			++local_sample_count;
+			local_sample_count += 2;
 			trigger_index = 0;
 		}
 	}
@@ -678,6 +678,9 @@ void simulate_base(const simulation_parameters& params, \
 	  params.sweep_count : 1;
 	const long trial_limit = params.simulation_trials;
 	for (long sweep=0; sweep<sweep_limit; ++sweep) {
+		if (params.perform_start_number_sweep == true_int) {
+			cout << "sweep = " << sweep << endl;
+		}
 		double average_extinction_time = 0.0;
 		long sweep_extinction_count = 0;
 		long population_start[2] = {
@@ -696,14 +699,21 @@ void simulate_base(const simulation_parameters& params, \
 			};
 			long offset = sweep*trial_limit;
 			long last_timestep = simulation_run_base(params, species_counts);
-			if (last_timestep) {
+			if (last_timestep > neg_one_long) {
 				data.extinction_times[offset + trial] = last_timestep;
 				average_extinction_time += static_cast<double>(last_timestep);
 				++sweep_extinction_count;
 			}
+			else {
+				cout << "Warning, no system extinction." << endl;
+			}
 		}
-		average_extinction_time /= static_cast<double>(sweep_extinction_count);
-		data.sweep_average_extinction_times[sweep] = average_extinction_time;
+		if (params.perform_start_number_sweep == true_int) {
+			average_extinction_time /= \
+			  static_cast<double>(sweep_extinction_count);
+			data.sweep_average_extinction_times[sweep] = \
+			  average_extinction_time;
+		}
 	}
 	return;
 }
@@ -715,6 +725,9 @@ void simulate_keep_trajectory(const simulation_parameters& params, \
 	  params.sweep_count : 1;
 	const long trial_limit = params.simulation_trials;
 	for (long sweep=0; sweep<sweep_limit; ++sweep) {
+		if (params.perform_start_number_sweep == true_int) {
+			cout << "sweep = " << sweep << endl;
+		}
 		double average_extinction_time = 0.0;
 		long sweep_extinction_count = 0;
 		long population_start[2] = {
@@ -734,14 +747,21 @@ void simulate_keep_trajectory(const simulation_parameters& params, \
 			long run_index = sweep*trial_limit + trial;
 			long last_timestep = simulation_run_keep_trajectory(params, data, \
 			  species_counts, run_index);
-			if (last_timestep) {
+			if (last_timestep > neg_one_long) {
 				data.extinction_times[run_index] = last_timestep;
 				average_extinction_time += static_cast<double>(last_timestep);
 				++sweep_extinction_count;
 			}
+			else {
+				cout << "Warning, no system extinction." << endl;
+			}
 		}
-		average_extinction_time /= static_cast<double>(sweep_extinction_count);
-		data.sweep_average_extinction_times[sweep] = average_extinction_time;
+		if (params.perform_start_number_sweep == true_int) {
+			average_extinction_time /= \
+			  static_cast<double>(sweep_extinction_count);
+			data.sweep_average_extinction_times[sweep] = \
+			  average_extinction_time;
+		}
 	}
 }
 
