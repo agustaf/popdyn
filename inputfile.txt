@@ -7,11 +7,11 @@ prey_start_number= -1
 predator_start_number= -1
 
 max_timesteps= 130000
-simulation_trials= 10
+simulation_trials= 5
 
 perform_start_number_sweep= 1
 species_to_sweep= prey
-sweep_count= 1
+sweep_count= 2
 sweep_change= 10
 
 keep_trajectory_samples= 0
