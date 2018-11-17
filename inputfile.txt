@@ -9,10 +9,10 @@ predator_start_number= -1
 max_timesteps= 130000
 simulation_trials= 5
 
-perform_start_number_sweep= 1
-species_to_sweep= prey
+perform_parameter_sweep= 1
+sweep_parameter= mu
 sweep_count= 2
-sweep_change= 10
+sweep_change= 0.0001
 
 keep_trajectory_samples= 0
 sample_interval= 10
@@ -22,3 +22,11 @@ keep_cycles_to_extinction= 0
 keep_extinction_time_histogram= 0
 extinction_time_histogram_length= 15
 extinction_time_histogram_bin_size= 10000
+
+#sweep_parameter options are:
+#prey_start_number
+#predator_start_number
+#mu
+#sigma
+#lambda
+

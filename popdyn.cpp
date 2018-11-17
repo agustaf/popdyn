@@ -26,6 +26,39 @@ constexpr long zero_long = 0;
 constexpr long one_long = 1;
 constexpr long neg_one_long = -1;
 
+typedef enum sweep_choice {
+	no_sweep = 0,
+	prey_start_number_sweep = 1,
+	predator_start_number_sweep = 2,
+	mu_sweep = 3,
+	sigma_sweep = 4,
+	lambda_sweep = 5
+} sweep_choice;
+
+sweep_choice sweep_parameter_from_string( \
+  const string& sweep_parameter_string) noexcept {
+	sweep_choice sweep_parameter = no_sweep;
+	if (sweep_parameter_string == "prey_start_number") {
+		sweep_parameter = prey_start_number_sweep;
+	}
+	else if (sweep_parameter_string == "predator_start_number") {
+		sweep_parameter = predator_start_number_sweep;
+	}
+	else if (sweep_parameter_string == "mu") {
+		sweep_parameter = mu_sweep;
+	}
+	else if (sweep_parameter_string == "sigma") {
+		sweep_parameter = sigma_sweep;
+	}
+	else if (sweep_parameter_string == "lambda") {
+		sweep_parameter = lambda_sweep;
+	}
+	else {
+		cout << "Unknown sweep parameter string: " << \
+		  sweep_parameter_string << endl;
+	}
+	return sweep_parameter;
+}
 
 //The following block of code contains the data structures for the simulation.
 typedef struct simulation_parameters {
@@ -42,15 +75,24 @@ typedef struct simulation_parameters {
 	long simulation_trials;
 	int keep_trajectory_samples;
 	long sample_interval;
-	int perform_start_number_sweep;
-	int species_to_sweep;
+	int perform_parameter_sweep;
+	sweep_choice schoice;
 	long sweep_count;
-	long sweep_change;
+	double sweep_change;
 	int keep_cycles_to_extinction;
 	int keep_extinction_time_histogram;
 	long extinction_time_histogram_length;
 	long extinction_time_histogram_bin_size;
 } simulation_parameters;
+
+typedef struct run_parameters {
+	public:
+	double mu;
+	double sigma;
+	double lambda;
+	long max_timesteps;
+	long sample_interval;
+} run_parameters;
 
 typedef struct simulation_data {
 	//This struct holds the results data from the simulation.
@@ -229,10 +271,14 @@ int binary_intcheck(const int value, const string& name) noexcept {
 	return(0);
 }
 
-int species_string_check(const string& value, const string& name) noexcept {
+int sweep_parameter_string_check(const string& value, const string& name) \
+  noexcept {
 	//This function checks that a string is either "prey" or "predator".
-	if ((value != "prey") && (value != "predator")) {
-		cout << "Input error, invalid species string choice for " << \
+	if ((value != "prey_start_number") && \
+	  (value != "predator_start_number") && \
+	  (value != "mu") && (value != "sigma") && \
+	  (value != "lambda")) {
+		cout << "Input error, invalid sweep parameter string choice for " << \
 		  name << endl;
 		return(1);
 	}
@@ -287,18 +333,18 @@ int read_input_parameters(const string& filename, ifstream& fp_in, \
 	fp_in >> params.simulation_trials;
 	input_success += positive_longcheck(params.simulation_trials, \
 	  "simulation_trials");
-	input_success += find_descriptor(fp_in, "perform_start_number_sweep=");
-	fp_in >> params.perform_start_number_sweep;
-	input_success += binary_intcheck(params.perform_start_number_sweep, \
-	  "perform_start_number_sweep");
-	if (params.perform_start_number_sweep == true_int) {
-		input_success += find_descriptor(fp_in, "species_to_sweep=");
-		string species_to_sweep_input = "";
-		fp_in >> species_to_sweep_input;
-		input_success += species_string_check(species_to_sweep_input, \
-		  "species_to_sweep");
-		const int chosen_species = (species_to_sweep_input == "prey") ? 0 : 1;
-		params.species_to_sweep = chosen_species;
+	input_success += find_descriptor(fp_in, "perform_parameter_sweep=");
+	fp_in >> params.perform_parameter_sweep;
+	input_success += binary_intcheck(params.perform_parameter_sweep, \
+	  "perform_parameter_sweep");
+	if (params.perform_parameter_sweep == true_int) {
+		input_success += find_descriptor(fp_in, "sweep_parameter=");
+		string parameter_to_sweep_input = "";
+		fp_in >> parameter_to_sweep_input;
+		input_success += sweep_parameter_string_check( \
+		  parameter_to_sweep_input, "parameter_to_sweep");
+		params.schoice = \
+		  sweep_parameter_from_string(parameter_to_sweep_input);
 		input_success += find_descriptor(fp_in, "sweep_count=");
 		fp_in >> params.sweep_count;
 		input_success += positive_longcheck(params.sweep_count, "sweep_count");
@@ -345,7 +391,7 @@ int read_input_parameters(const string& filename, ifstream& fp_in, \
 	}
 	input_success += close_input_file(fp_in, "base input file");
 	if (input_success != 0) {
-		cout << "Error, required input parameters  ";
+		cout << "Error, required input parameters ";
 		cout << "missing or out of bounds." << endl;
 		return(1);
 	}
@@ -360,7 +406,7 @@ int allocate_data_arrays(simulation_data& data_in, \
 	//This function allocates data arrays for results data
 	//within a simulation_data data structure.
 	const long max_simulation_count = \
-	  (params_in.perform_start_number_sweep == true_int) ? \
+	  (params_in.perform_parameter_sweep == true_int) ? \
 	  params_in.simulation_trials*params_in.sweep_count : \
 	  params_in.simulation_trials;
 	data_in.extinction_times = new long[max_simulation_count];
@@ -375,13 +421,13 @@ int allocate_data_arrays(simulation_data& data_in, \
 		data_in.single_group_samples = data_in.single_run_samples* \
 		  params_in.simulation_trials;
 		const long max_samples = \
-		  (params_in.perform_start_number_sweep == true_int) ? \
+		  (params_in.perform_parameter_sweep == true_int) ? \
 		  params_in.sweep_count*data_in.single_group_samples : \
 		  data_in.single_group_samples;
 		data_in.samples = new long[max_samples];
 		fill(data_in.samples, data_in.samples + max_samples, neg_one_long);
 	}
-	if (params_in.perform_start_number_sweep == true_int) {
+	if (params_in.perform_parameter_sweep == true_int) {
 		data_in.sweep_average_extinction_times = \
 		  new double[params_in.sweep_count];
 		fill(data_in.sweep_average_extinction_times, \
@@ -413,26 +459,67 @@ int write_data(const simulation_data& data, \
 	ss << "_mu" << params.mu << "_sigma" << params.sigma << "_lambda" << \
 	  params.lambda << "_preystart" << params.prey_start_number << \
 	  "_predatorstart" << params.predator_start_number;
-	if (params.perform_start_number_sweep == true_int) {
-		const string sweep_species = (params.species_to_sweep == prey_int) ? \
-		  "prey" : "predator";
-		ss << "_sweep" << sweep_species << "_schange" << params.sweep_change;
+	string sweep_string = "NA";
+	if (params.perform_parameter_sweep == true_int) {
+		switch (params.schoice) {
+			case prey_start_number_sweep:
+				sweep_string = "preystart";
+				break;
+			case predator_start_number_sweep:
+				sweep_string = "predatorstart";
+				break;
+			case mu_sweep:
+				sweep_string = "mu";
+				break;
+			case sigma_sweep:
+				sweep_string = "sigma";
+				break;
+			case lambda_sweep:
+				sweep_string = "lambda";
+				break;
+			default:
+				cout << "write_data, unknown params.schoice value" << endl;
+				break;
+		}
+		ss << "_sweep" << sweep_string << "_schange" << \
+		  params.sweep_change;
 	}
 	const string file_suffix = ss.str() + ".txt";
 	ss.str(string());
 	ss.clear();
 	ofstream fp_out;
 	int output_success = 0;
-	if (params.perform_start_number_sweep == true_int) {
-		const long sweep_start_value = \
-		  (params.species_to_sweep == prey_int) ? \
-		  params.prey_start_number : params.predator_start_number;
+	if (params.perform_parameter_sweep == true_int) {
+		double sweep_start_value = 0.0;
+		switch (params.schoice) {
+			case prey_start_number_sweep:
+				sweep_start_value = \
+				  static_cast<double>(params.prey_start_number);
+				break;
+			case predator_start_number_sweep:
+				sweep_start_value = \
+				  static_cast<double>(params.predator_start_number);
+				break;
+			case mu_sweep:
+				sweep_start_value = params.mu;
+				break;
+			case sigma_sweep:
+				sweep_start_value = params.sigma;
+				break;
+			case lambda_sweep:
+				sweep_start_value = params.lambda;
+				break;
+			default:
+				cout << "write_data, unkown params.schoice value" << endl;
+				break;
+		}
 		output_success += open_output_file("extinction_times" + file_suffix, \
 		  fp_out, "extinction_times");
-		fp_out << "sweep_population_startval,extinction_time" << endl;
+		fp_out << sweep_string << "_value,extinction_time" << endl;
 		for (long i=0; i<params.sweep_count; ++i) {
 			long offset = i*params.simulation_trials;
-			long sweep_value = sweep_start_value + (i*params.sweep_change);
+			double sweep_value = sweep_start_value + \
+			  (static_cast<double>(i)*params.sweep_change);
 			for (long j=0; j<params.simulation_trials; ++j) {
 				if (data.extinction_times[offset + j] > neg_one_long) {
 					fp_out << sweep_value << "," << \
@@ -445,9 +532,10 @@ int write_data(const simulation_data& data, \
 		output_success += \
 		  open_output_file("sweep_average_extinction_times" + file_suffix, \
 		  fp_out, "sweep_average_extinction_times");
-		fp_out << "sweep_population_startval,average_extinction_time" << endl;
+		fp_out << sweep_string << "_value,average_extinction_time" << endl;
 		for (long i=0; i<params.sweep_count; ++i) {
-			long sweep_value = sweep_start_value + (i*params.sweep_change);
+			double sweep_value = sweep_start_value + \
+			  (static_cast<double>(i)*params.sweep_change);
 			fp_out << sweep_value << "," << \
 			  data.sweep_average_extinction_times[i] << '\n';
 		}
@@ -458,10 +546,11 @@ int write_data(const simulation_data& data, \
 			output_success += open_output_file( \
 			  "population_trajectory" + file_suffix, fp_out, \
 			  "population_trajectory");
-			fp_out << "sweep_population_startval,prey,predators" <<  endl;
+			fp_out << sweep_string << "_value,prey,predators" <<  endl;
 			for (long i=0; i<params.sweep_count; ++i) {
 				long offset = i*data.single_group_samples;
-				long sweep_value = sweep_start_value + (i*params.sweep_change);
+				double sweep_value = sweep_start_value + \
+				  (static_cast<double>(i)*params.sweep_change);
 				for (long j=0; j<data.single_group_samples; j+=2) {
 					if (data.samples[offset + j] > neg_one_long) {
 						fp_out << sweep_value << "," << \
@@ -478,10 +567,11 @@ int write_data(const simulation_data& data, \
 			output_success += open_output_file( \
 			  "cycles_to_extinction" + file_suffix, fp_out, \
 			  "cycles_to_extinction");
-			fp_out << "sweep_population_startval,cycles_to_extinction" << endl;
+			fp_out << sweep_string << "_value,cycles_to_extinction" << endl;
 			for (long i=0; i<params.sweep_count; ++i) {
 				long offset = i*params.simulation_trials;
-				long sweep_value = sweep_start_value + (i*params.sweep_change);
+				double sweep_value = sweep_start_value + \
+				  (static_cast<double>(i)*params.sweep_change);
 				for (long j=0; j<params.simulation_trials; ++j) {
 					if (data.max_cycles_list[offset + j] > neg_one_long) {
 						fp_out << sweep_value << "," << \
@@ -573,12 +663,14 @@ inline void advance_species(long*const __restrict__ species_counts_in, \
   const double& lambda_in) noexcept {
 	//This function advances the predator and prey counts, using the
 	//input probabilities and the direct binomial probability calculation.
-	const long mu_change = direct_binomial(mu_in, species_counts_in[0]);
-	const long sigma_change = direct_binomial(sigma_in, species_counts_in[1]);
-	const long species_product = species_counts_in[0]*species_counts_in[1];
+	const long mu_change = direct_binomial(mu_in, species_counts_in[prey_int]);
+	const long sigma_change = \
+	  direct_binomial(sigma_in, species_counts_in[predator_int]);
+	const long species_product = \
+	  species_counts_in[prey_int]*species_counts_in[predator_int];
 	const long lambda_change = direct_binomial(lambda_in, species_product);
-	species_counts_in[0] += (mu_change - lambda_change);
-	species_counts_in[1] += (lambda_change - sigma_change);
+	species_counts_in[prey_int] += (mu_change - lambda_change);
+	species_counts_in[predator_int] += (lambda_change - sigma_change);
 	return;
 }
 
@@ -606,7 +698,7 @@ inline int quadrant(const long*const __restrict__ species_counts_in, \
 	return(quadrant_out);
 }
 
-inline long simulation_run_base(const simulation_parameters& params, \
+inline long simulation_run_base(const run_parameters& params, \
   long*const __restrict__ species_counts) noexcept {
 	const long timestep_limit = params.max_timesteps;
 	long last_timestep = neg_one_long;
@@ -616,12 +708,12 @@ inline long simulation_run_base(const simulation_parameters& params, \
 		}*/
 		advance_species(species_counts, params.mu, params.sigma, \
 		  params.lambda);
-		if (species_counts[0] < 1) {
-			species_counts[0] = 0;
+		if (species_counts[prey_int] < 1) {
+			species_counts[prey_int] = 0;
 			last_timestep = i + 1;
 		}
-		if (species_counts[1] < 1) {
-			species_counts[1] = 0;
+		if (species_counts[predator_int] < 1) {
+			species_counts[predator_int] = 0;
 			last_timestep = i + 1;
 		}
 		if (last_timestep > neg_one_long) {
@@ -632,7 +724,7 @@ inline long simulation_run_base(const simulation_parameters& params, \
 }
 
 inline long simulation_run_keep_trajectory( \
-  const simulation_parameters& params, simulation_data& data, \
+  const run_parameters& params, simulation_data& data, \
   long*const __restrict__ species_counts, const long& run_index) noexcept {
 	const long timestep_limit = params.max_timesteps;
 	const long sample_interval_limit = params.sample_interval;
@@ -643,12 +735,12 @@ inline long simulation_run_keep_trajectory( \
 	for (long i=0; i<timestep_limit; ++i) {
 		advance_species(species_counts, params.mu, params.sigma, \
 		  params.lambda);
-		if (species_counts[0] < 1) {
-			species_counts[0] = 0;
+		if (species_counts[prey_int] < 1) {
+			species_counts[prey_int] = 0;
 			last_timestep = i + 1;
 		}
-		if (species_counts[1] < 1) {
-			species_counts[1] = 0;
+		if (species_counts[predator_int] < 1) {
+			species_counts[predator_int] = 0;
 			last_timestep = i + 1;
 		}
 		if (last_timestep > neg_one_long) {
@@ -674,11 +766,11 @@ inline long simulation_run_keep_trajectory( \
 void simulate_base(const simulation_parameters& params, \
   simulation_data& data) noexcept {
 	const long sweep_limit = \
-	  (params.perform_start_number_sweep == true_int) ? \
+	  (params.perform_parameter_sweep == true_int) ? \
 	  params.sweep_count : 1;
 	const long trial_limit = params.simulation_trials;
 	for (long sweep=0; sweep<sweep_limit; ++sweep) {
-		if (params.perform_start_number_sweep == true_int) {
+		if (params.perform_parameter_sweep == true_int) {
 			cout << "sweep = " << sweep << endl;
 		}
 		double average_extinction_time = 0.0;
@@ -687,18 +779,46 @@ void simulate_base(const simulation_parameters& params, \
 			params.prey_start_number,
 			params.predator_start_number
 		};
-		if (params.perform_start_number_sweep == true_int) {
-			population_start[params.species_to_sweep] += \
-			  sweep*params.sweep_change;
+		run_parameters run_params = {
+			params.mu,
+			params.sigma,
+			params.lambda,
+			params.max_timesteps,
+			params.sample_interval
+		};
+		if (params.perform_parameter_sweep == true_int) {
+			switch (params.schoice) {
+				case prey_start_number_sweep:
+					population_start[prey_int] += \
+					  sweep*static_cast<long>(params.sweep_change);
+					break;
+				case predator_start_number_sweep:
+					population_start[predator_int] += \
+					  sweep*static_cast<long>(params.sweep_change);
+					break;
+				case mu_sweep:
+					run_params.mu += sweep*params.sweep_change;
+					break;
+				case sigma_sweep:
+					run_params.sigma += sweep*params.sweep_change;
+					break;
+				case lambda_sweep:
+					run_params.lambda += sweep*params.sweep_change;
+					break;
+				default:
+					cout << "simulate_base, unknown params.schoice" << endl;
+					break;
+			}
 		}
 		for (long trial=0; trial<trial_limit; ++trial) {
 			cout << "trial = " << trial << endl;
 			long species_counts[2] = {
-				population_start[0],
-				population_start[1]
+				population_start[prey_int],
+				population_start[predator_int]
 			};
 			long offset = sweep*trial_limit;
-			long last_timestep = simulation_run_base(params, species_counts);
+			long last_timestep = \
+			  simulation_run_base(run_params, species_counts);
 			if (last_timestep > neg_one_long) {
 				data.extinction_times[offset + trial] = last_timestep;
 				average_extinction_time += static_cast<double>(last_timestep);
@@ -708,7 +828,7 @@ void simulate_base(const simulation_parameters& params, \
 				cout << "Warning, no system extinction." << endl;
 			}
 		}
-		if (params.perform_start_number_sweep == true_int) {
+		if (params.perform_parameter_sweep == true_int) {
 			average_extinction_time /= \
 			  static_cast<double>(sweep_extinction_count);
 			data.sweep_average_extinction_times[sweep] = \
@@ -721,11 +841,11 @@ void simulate_base(const simulation_parameters& params, \
 void simulate_keep_trajectory(const simulation_parameters& params, \
   simulation_data& data) noexcept {
 	const long sweep_limit = \
-	  (params.perform_start_number_sweep == true_int) ? \
+	  (params.perform_parameter_sweep == true_int) ? \
 	  params.sweep_count : 1;
 	const long trial_limit = params.simulation_trials;
 	for (long sweep=0; sweep<sweep_limit; ++sweep) {
-		if (params.perform_start_number_sweep == true_int) {
+		if (params.perform_parameter_sweep == true_int) {
 			cout << "sweep = " << sweep << endl;
 		}
 		double average_extinction_time = 0.0;
@@ -734,19 +854,46 @@ void simulate_keep_trajectory(const simulation_parameters& params, \
 			params.prey_start_number,
 			params.predator_start_number
 		};
-		if (params.perform_start_number_sweep == true_int) {
-			population_start[params.species_to_sweep] += \
-			  sweep*params.sweep_change;
+		run_parameters run_params = {
+			params.mu,
+			params.sigma,
+			params.lambda,
+			params.max_timesteps,
+			params.sample_interval
+		};
+		if (params.perform_parameter_sweep == true_int) {
+			switch (params.schoice) {
+				case prey_start_number_sweep:
+					population_start[prey_int] += \
+					  sweep*static_cast<long>(params.sweep_change);
+					break;
+				case predator_start_number_sweep:
+					population_start[predator_int] += \
+					  sweep*static_cast<long>(params.sweep_change);
+					break;
+				case mu_sweep:
+					run_params.mu += sweep*params.sweep_change;
+					break;
+				case sigma_sweep:
+					run_params.sigma += sweep*params.sweep_change;
+					break;
+				case lambda_sweep:
+					run_params.lambda += sweep*params.sweep_change;
+					break;
+				default:
+					cout << "simulate_base, unknown params.schoice" << endl;
+					break;
+			}
 		}
 		for (long trial=0; trial<trial_limit; ++trial) {
 			cout << "trial = " << trial << endl;
 			long species_counts[2] = {
-				population_start[0],
-				population_start[1]
+				population_start[prey_int],
+				population_start[predator_int]
 			};
 			long run_index = sweep*trial_limit + trial;
-			long last_timestep = simulation_run_keep_trajectory(params, data, \
-			  species_counts, run_index);
+			long last_timestep = simulation_run_keep_trajectory(run_params, \
+			  data, species_counts, run_index);
 			if (last_timestep > neg_one_long) {
 				data.extinction_times[run_index] = last_timestep;
 				average_extinction_time += static_cast<double>(last_timestep);
@@ -756,7 +903,7 @@ void simulate_keep_trajectory(const simulation_parameters& params, \
 				cout << "Warning, no system extinction." << endl;
 			}
 		}
-		if (params.perform_start_number_sweep == true_int) {
+		if (params.perform_parameter_sweep == true_int) {
 			average_extinction_time /= \
 			  static_cast<double>(sweep_extinction_count);
 			data.sweep_average_extinction_times[sweep] = \
@@ -802,8 +949,8 @@ int main(int argc, char** argv) {
 		params_input.simulation_trials,
 		params_input.keep_trajectory_samples,
 		params_input.sample_interval,
-		params_input.perform_start_number_sweep,
-		params_input.species_to_sweep,
+		params_input.perform_parameter_sweep,
+		params_input.schoice,
 		params_input.sweep_count,
 		params_input.sweep_change,
 		params_input.keep_cycles_to_extinction,
